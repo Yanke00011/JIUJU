@@ -17,8 +17,8 @@ RUN pnpm install --frozen-lockfile
 
 # ---------- Stage 2: build ----------
 FROM install AS build
-# 生产使用相对路径 /api（由 nginx 反向代理到 api）；禁止写死 localhost:3000
-ARG VITE_API_BASE_URL=/api
+# 生产请求后端 v1 前缀；不传时也默认 /api/v1（与 nginx 反代一致，不写死 localhost）
+ARG VITE_API_BASE_URL=/api/v1
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 COPY apps/web ./apps/web
 RUN pnpm --filter @jiuju/web build

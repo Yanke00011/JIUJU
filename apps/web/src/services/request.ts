@@ -3,7 +3,8 @@ import { message } from "antd";
 import { useAuthStore } from "../store/auth";
 import type { ApiResponse } from "../types/api";
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+// 默认直接请求后端 v1 前缀（生产不传 VITE_API_BASE_URL 也能命中 /api/v1）
+const baseURL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 const request = axios.create({
   baseURL,

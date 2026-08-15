@@ -10,7 +10,8 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:3000",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, "/api/v1"),
+        // 归一化：/api/xxx 与 /api/v1/xxx 都转发到后端 /api/v1/xxx
+        rewrite: (path) => path.replace(/^\/api(?:\/v1)?/, "/api/v1"),
       },
     },
   },

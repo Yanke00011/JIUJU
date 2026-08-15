@@ -6,6 +6,21 @@
 
 ---
 
+## Phase 17.5.1 — 前端默认 API 前缀统一为 /api/v1
+
+- **状态**：已完成
+- **问题**：前端 `request.ts` 默认 `VITE_API_BASE_URL || "/api"`；若生产构建未传入 `VITE_API_BASE_URL`，请求落到 `/api/auth/register`，而后端真实前缀是 `/api/v1`，导致 404。
+- **修复**：
+  1. `apps/web/src/services/request.ts`：默认值 `/api` → `/api/v1`（不传环境变量也直接命中后端 v1 前缀）。
+  2. `apps/web/vite.config.ts`：代理 rewrite 归一化为 `^/api(?:\/v1)?` → `/api/v1`（`/api/xxx` 与 `/api/v1/xxx` 都能正确转发，杜绝双重 /v1）。
+  3. `apps/web/.env.example`：`VITE_API_BASE_URL=/api/v1`。
+  4. `apps/web/Dockerfile` 与 `docker-compose.prod.yml`：`VITE_API_BASE_URL` 默认/传参统一为 `/api/v1`。
+- **nginx 兼容**：`rewrite ^/api/(?!v1/)...` 保留，`/api/xxx`（旧路径）仍会补 `/v1`，`/api/v1/xxx` 原样转发。
+- **验证**：本地构建产物 baseURL 为 `/api/v1`；web 镜像重建后隔离容器实测 `/api/v1/health` 与 `/api/health` 均 database up、注册/登录经代理成功；Vite 开发代理 `/api/v1` 与 `/api` 均正常。
+- **Git commit**：`fix: default frontend api base to /api/v1`
+
+---
+
 ## Phase 17.5 — JIUJU V1.0 Release Candidate 最终上线审验
 
 - **状态**：已完成
