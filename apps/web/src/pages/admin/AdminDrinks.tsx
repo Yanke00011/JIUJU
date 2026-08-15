@@ -134,11 +134,9 @@ export default function AdminDrinks() {
 
   return (
     <div>
-      <Typography.Title level={4} style={{ marginTop: 0 }}>
-        饮酒记录管理
-      </Typography.Title>
+      <Typography.Title level={2} className="admin-page-title">饮酒记录管理</Typography.Title>
 
-      <Space wrap style={{ marginBottom: 12 }}>
+      <div className="admin-toolbar"><Space wrap>
         <Input
           placeholder="房间 ID"
           style={{ width: 200 }}
@@ -169,7 +167,7 @@ export default function AdminDrinks() {
         >
           重置
         </Button>
-      </Space>
+      </Space></div>
 
       <Table<AdminDrinkItem>
         rowKey="id"

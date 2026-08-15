@@ -30,9 +30,8 @@ export default function CreateRoom() {
         返回
       </Button>
       <Card>
-        <Typography.Title level={4} style={{ marginTop: 0 }}>
-          创建酒局
-        </Typography.Title>
+        <Typography.Title level={3} className="page-title">创建酒局</Typography.Title>
+        <Typography.Paragraph className="page-subtitle">给这次碰杯起个名字，邀请朋友入席。</Typography.Paragraph>
         <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
           <Form.Item
             name="name"

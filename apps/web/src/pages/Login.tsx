@@ -54,24 +54,12 @@ export default function Login() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#f0f2f5",
-        padding: 16,
-      }}
-    >
-      <Card style={{ width: "100%", maxWidth: 400 }}>
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <Typography.Title level={3} style={{ marginBottom: 4 }}>
-            酒局管家
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            扫码记录饮酒 · 朋友聚会防逃酒
-          </Typography.Text>
+    <div className="auth-page">
+      <Card className="auth-card">
+        <div className="auth-brand">
+          <span className="brand-mark">酒</span>
+          <Typography.Title level={3}>酒局管家</Typography.Title>
+          <p>扫码记录每一杯，让聚会更公平</p>
         </div>
 
         <Tabs
@@ -147,7 +135,7 @@ export default function Login() {
               maxLength={128}
             />
           </Form.Item>
-          <Button type="primary" htmlType="submit" block loading={loading}>
+          <Button type="primary" size="large" htmlType="submit" block loading={loading}>
             {mode === "login" ? "登录" : "注册"}
           </Button>
         </Form>

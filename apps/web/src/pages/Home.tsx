@@ -1,214 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
-import { Button, Card, Empty, List, Space, Tag, Typography } from "antd";
-import {
-  PlusOutlined,
-  UnorderedListOutlined,
-  CoffeeOutlined,
-  TeamOutlined,
-  SafetyOutlined,
-} from "@ant-design/icons";
+import { Avatar, Button, Card, Empty, Skeleton, Space, Tag, Typography } from "antd";
+import { CameraOutlined, CrownOutlined, PlusOutlined, SafetyCertificateOutlined, TeamOutlined, TrophyOutlined, UserOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "../components/AppLayout";
 import { roomsApi } from "../services/rooms";
 import { useAuthStore } from "../store/auth";
 import type { Room } from "../types/api";
 
-const STATUS_LABEL: Record<Room["status"], { text: string; color: string }> = {
-  ACTIVE: { text: "进行中", color: "green" },
-  ENDED: { text: "已结束", color: "default" },
-};
+const STATUS_LABEL: Record<Room["status"], { text: string; color: string }> = { ACTIVE: { text: "进行中", color: "success" }, ENDED: { text: "已结束", color: "default" } };
 
-/** 未登录时展示的产品首页 */
 function Landing() {
   const navigate = useNavigate();
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#f0f2f5" }}>
-      <div
-        style={{
-          background: "linear-gradient(160deg, #1677ff 0%, #0958d9 100%)",
-          color: "#fff",
-          padding: "64px 24px 48px",
-          textAlign: "center",
-        }}
-      >
-        <CoffeeOutlined style={{ fontSize: 64, marginBottom: 16 }} />
-        <Typography.Title
-          level={2}
-          style={{ color: "#fff", margin: "0 0 8px" }}
-        >
-          酒局管家
-        </Typography.Title>
-        <Typography.Paragraph
-          style={{
-            color: "rgba(255,255,255,0.85)",
-            fontSize: 16,
-            marginBottom: 8,
-          }}
-        >
-          扫码记录饮酒 · 朋友聚会防逃酒
-        </Typography.Paragraph>
-        <Typography.Paragraph
-          style={{ color: "rgba(255,255,255,0.65)", marginBottom: 0 }}
-        >
-          创建酒局，邀请好友，扫码登记，自动统计
-        </Typography.Paragraph>
-      </div>
-
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "24px 16px" }}>
-        <Space direction="vertical" size={12} style={{ width: "100%" }}>
-          <Button
-            type="primary"
-            size="large"
-            block
-            onClick={() => navigate("/login")}
-          >
-            登录
-          </Button>
-          <Button size="large" block onClick={() => navigate("/register")}>
-            注册
-          </Button>
-        </Space>
-
-        <div style={{ marginTop: 32 }}>
-          <Card size="small" style={{ marginBottom: 12 }}>
-            <Space>
-              <SafetyOutlined style={{ color: "#1677ff", fontSize: 20 }} />
-              <div>
-                <div style={{ fontWeight: 500 }}>防逃酒</div>
-                <div style={{ fontSize: 13, color: "#999" }}>
-                  谁的酒，喝了多少，一目了然
-                </div>
-              </div>
-            </Space>
-          </Card>
-          <Card size="small" style={{ marginBottom: 12 }}>
-            <Space>
-              <TeamOutlined style={{ color: "#1677ff", fontSize: 20 }} />
-              <div>
-                <div style={{ fontWeight: 500 }}>朋友聚会</div>
-                <div style={{ fontSize: 13, color: "#999" }}>
-                  邀请码加入，成员排行清晰
-                </div>
-              </div>
-            </Space>
-          </Card>
-          <Card size="small">
-            <Space>
-              <UnorderedListOutlined
-                style={{ color: "#1677ff", fontSize: 20 }}
-              />
-              <div>
-                <div style={{ fontWeight: 500 }}>自动统计</div>
-                <div style={{ fontSize: 13, color: "#999" }}>
-                  瓶数、容量、酒精量实时排行
-                </div>
-              </div>
-            </Space>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
+  const features = [[CameraOutlined, "扫码识别", "对准酒瓶条码，酒品信息即刻确认"], [TrophyOutlined, "实时排行", "每一杯都有记录，战况随时更新"], [CrownOutlined, "酒量统计", "瓶数、容量与酒精量一眼看清"], [SafetyCertificateOutlined, "公平记账", "聚会不靠记忆，数据说了算"]] as const;
+  const steps = [["01", "创建酒局", "起个名字，马上开场"], ["02", "邀请朋友", "发出六位邀请码"], ["03", "扫码喝酒", "每一瓶都有归属"], ["04", "查看排行", "举杯也要明明白白"]];
+  return <main className="landing"><section className="landing-hero"><nav className="landing-nav"><div className="brand-lockup"><span className="brand-mark">酒</span><span><strong>酒局管家</strong><small>JIUJU SOCIAL CLUB</small></span></div><Button type="text" style={{ color: "#fff" }} onClick={() => navigate("/login")}>登录</Button></nav><div className="landing-copy"><span className="eyebrow">聚会的公平记录官</span><h1>酒局管家</h1><p>扫码记录每一杯酒<br />让聚会更公平</p><div className="landing-actions"><Button type="primary" size="large" onClick={() => navigate("/register")}>创建酒局</Button><Button size="large" onClick={() => navigate("/login")}>加入酒局</Button></div></div></section><section className="landing-body"><span className="section-label">ONE TAP, ALL FAIR</span><h2 className="section-title">聚会该尽兴，记录交给我们</h2><div className="feature-grid">{features.map(([Icon, title, desc]) => <article className="feature-card" key={title}><span className="feature-icon"><Icon /></span><h3>{title}</h3><p>{desc}</p></article>)}</div><div className="steps">{steps.map(([no, title, desc]) => <article className="step" key={no}><span className="step-no">{no}</span><h3>{title}</h3><p>{desc}</p></article>)}</div></section></main>;
 }
 
-/** 已登录时展示的酒局列表 */
 function MyRooms() {
   const navigate = useNavigate();
-  const { data: rooms, isLoading } = useQuery({
-    queryKey: ["rooms"],
-    queryFn: roomsApi.list,
-  });
-
-  return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 16,
-        }}
-      >
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          我的酒局
-        </Typography.Title>
-        <Space>
-          <Button
-            icon={<PlusOutlined />}
-            onClick={() => navigate("/rooms/create")}
-          >
-            创建酒局
-          </Button>
-          <Button onClick={() => navigate("/rooms/join")}>加入酒局</Button>
-        </Space>
-      </div>
-
-      <List
-        loading={isLoading}
-        locale={{
-          emptyText: (
-            <Empty
-              description="还没有酒局，创建一个吧"
-              style={{ padding: "32px 0" }}
-            >
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => navigate("/rooms/create")}
-              >
-                创建酒局
-              </Button>
-            </Empty>
-          ),
-        }}
-        dataSource={rooms ?? []}
-        renderItem={(room) => {
-          const status = STATUS_LABEL[room.status];
-          return (
-            <Card
-              hoverable
-              size="small"
-              style={{ marginBottom: 12 }}
-              onClick={() => navigate(`/rooms/${room.id}`)}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 500 }}>
-                    {room.name}
-                  </div>
-                  <div style={{ fontSize: 13, color: "#999", marginTop: 4 }}>
-                    <UnorderedListOutlined style={{ marginRight: 4 }} />
-                    邀请码：{room.inviteCode}
-                  </div>
-                </div>
-                <Tag color={status.color}>{status.text}</Tag>
-              </div>
-            </Card>
-          );
-        }}
-      />
-    </div>
-  );
+  const { data: rooms, isLoading, isError } = useQuery({ queryKey: ["rooms"], queryFn: roomsApi.list });
+  return <div><div className="page-heading"><div><Typography.Title level={2} className="page-title">我的酒局</Typography.Title><Typography.Paragraph className="page-subtitle">把每一次碰杯，都记得清清楚楚。</Typography.Paragraph></div><Space><Button icon={<TeamOutlined />} onClick={() => navigate("/rooms/join")}>加入</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => navigate("/rooms/create")}>创建</Button></Space></div>{isLoading ? <Space direction="vertical" size={14} style={{ width: "100%" }}><Card><Skeleton active /></Card><Card><Skeleton active /></Card></Space> : isError ? <Card><Empty description="酒局加载失败，请稍后重试" /></Card> : !rooms?.length ? <Card><Empty description="还没有酒局，先开一桌吧"><Button type="primary" icon={<PlusOutlined />} onClick={() => navigate("/rooms/create")}>创建酒局</Button></Empty></Card> : <Space direction="vertical" size={14} style={{ width: "100%" }}>{rooms.map((room) => { const status = STATUS_LABEL[room.status]; return <Card className="room-card" key={room.id} onClick={() => navigate(`/rooms/${room.id}`)}><div className="room-card-top"><div><div className="room-card-name">{room.name}</div><div className="room-code">邀请码 <b>{room.inviteCode}</b></div></div><Tag color={status.color}>{status.text}</Tag></div><div className="room-avatar-group"><Avatar.Group max={{ count: 4 }}><Avatar icon={<UserOutlined />} style={{ backgroundColor: "#8B1E3F" }} /><Avatar icon={<UserOutlined />} style={{ backgroundColor: "#d18a9e" }} /><Avatar icon={<UserOutlined />} style={{ backgroundColor: "#e6a23c" }} /></Avatar.Group><span className="room-members">点击查看酒局详情</span></div></Card>; })}</Space>}</div>;
 }
 
-/**
- * 首页：未登录展示产品介绍，已登录展示我的酒局。
- */
-export default function Home() {
-  const token = useAuthStore((state) => state.token);
-  if (!token) {
-    return <Landing />;
-  }
-  return (
-    <AppLayout>
-      <MyRooms />
-    </AppLayout>
-  );
-}
+export default function Home() { const token = useAuthStore((state) => state.token); return token ? <AppLayout><MyRooms /></AppLayout> : <Landing />; }

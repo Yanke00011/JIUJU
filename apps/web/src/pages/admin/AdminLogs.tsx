@@ -72,11 +72,9 @@ export default function AdminLogs() {
 
   return (
     <div>
-      <Typography.Title level={4} style={{ marginTop: 0 }}>
-        操作日志
-      </Typography.Title>
+      <Typography.Title level={2} className="admin-page-title">操作日志</Typography.Title>
 
-      <Space style={{ marginBottom: 12 }}>
+      <div className="admin-toolbar"><Space wrap>
         <Select
           allowClear
           placeholder="按操作过滤"
@@ -105,7 +103,7 @@ export default function AdminLogs() {
             { value: "Product", label: "商品" },
           ]}
         />
-      </Space>
+      </Space></div>
 
       <Table<AdminLogItem>
         rowKey="id"
@@ -127,7 +125,7 @@ export default function AdminLogs() {
         scroll={{ x: 640 }}
       />
 
-      <Drawer
+      <Drawer className="drawer-detail"
         title="日志详情"
         open={!!detailId}
         onClose={() => setDetailId(null)}

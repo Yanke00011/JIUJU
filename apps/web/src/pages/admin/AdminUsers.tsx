@@ -170,11 +170,9 @@ export default function AdminUsers() {
 
   return (
     <div>
-      <Typography.Title level={4} style={{ marginTop: 0 }}>
-        用户管理
-      </Typography.Title>
+      <Typography.Title level={2} className="admin-page-title">用户管理</Typography.Title>
 
-      <Input.Search
+      <div className="admin-toolbar"><Input.Search
         placeholder="搜索用户名 / 昵称"
         allowClear
         style={{ maxWidth: 320, marginBottom: 12 }}
@@ -182,7 +180,7 @@ export default function AdminUsers() {
           setKeyword(v);
           setPage(1);
         }}
-      />
+      /></div>
 
       <Table<AdminUser>
         rowKey="id"
@@ -204,7 +202,7 @@ export default function AdminUsers() {
         scroll={{ x: 640 }}
       />
 
-      <Drawer
+      <Drawer className="drawer-detail"
         title="用户详情"
         open={!!detail}
         onClose={() => setDetail(null)}

@@ -32,9 +32,8 @@ export default function JoinRoom() {
         返回
       </Button>
       <Card>
-        <Typography.Title level={4} style={{ marginTop: 0 }}>
-          加入酒局
-        </Typography.Title>
+        <Typography.Title level={3} className="page-title">加入酒局</Typography.Title>
+        <Typography.Paragraph className="page-subtitle">输入朋友分享的邀请码，即刻入席。</Typography.Paragraph>
         <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
           <Form.Item
             name="inviteCode"

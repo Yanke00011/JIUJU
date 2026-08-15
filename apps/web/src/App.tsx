@@ -1,24 +1,28 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Spin } from "antd";
 import AppLayout from "./components/AppLayout";
 import AdminLayout from "./components/AdminLayout";
 import PrivateRoute from "./router/PrivateRoute";
 import AdminRoute from "./router/AdminRoute";
-import Login from "./pages/Login";
-import Home from "./pages/Home";
-import CreateRoom from "./pages/CreateRoom";
-import JoinRoom from "./pages/JoinRoom";
-import RoomDetail from "./pages/RoomDetail";
-import DrinkRecord from "./pages/DrinkRecord";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminUsers from "./pages/admin/AdminUsers";
-import AdminRooms from "./pages/admin/AdminRooms";
-import AdminProducts from "./pages/admin/AdminProducts";
-import AdminDrinks from "./pages/admin/AdminDrinks";
-import AdminLogs from "./pages/admin/AdminLogs";
+const Login = lazy(() => import("./pages/Login"));
+const Home = lazy(() => import("./pages/Home"));
+const CreateRoom = lazy(() => import("./pages/CreateRoom"));
+const JoinRoom = lazy(() => import("./pages/JoinRoom"));
+const RoomDetail = lazy(() => import("./pages/RoomDetail"));
+const DrinkRecord = lazy(() => import("./pages/DrinkRecord"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
+const AdminRooms = lazy(() => import("./pages/admin/AdminRooms"));
+const AdminProducts = lazy(() => import("./pages/admin/AdminProducts"));
+const AdminDrinks = lazy(() => import("./pages/admin/AdminDrinks"));
+const AdminLogs = lazy(() => import("./pages/admin/AdminLogs"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 export default function App() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><Spin size="large" tip="正在加载酒局…" /></div>}>
       <Routes>
         {/* 公开路由 */}
         <Route path="/" element={<Home />} />
@@ -59,8 +63,9 @@ export default function App() {
           <Route path="/admin/logs" element={<AdminLogs />} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

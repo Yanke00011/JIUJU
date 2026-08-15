@@ -161,11 +161,9 @@ export default function AdminRooms() {
 
   return (
     <div>
-      <Typography.Title level={4} style={{ marginTop: 0 }}>
-        房间管理
-      </Typography.Title>
+      <Typography.Title level={2} className="admin-page-title">房间管理</Typography.Title>
 
-      <Input.Search
+      <div className="admin-toolbar"><Input.Search
         placeholder="搜索名称 / 邀请码 / 房主"
         allowClear
         style={{ maxWidth: 320, marginBottom: 12 }}
@@ -173,7 +171,7 @@ export default function AdminRooms() {
           setKeyword(v);
           setPage(1);
         }}
-      />
+      /></div>
 
       <Table<AdminRoomItem>
         rowKey="id"
@@ -195,7 +193,7 @@ export default function AdminRooms() {
         scroll={{ x: 720 }}
       />
 
-      <Drawer
+      <Drawer className="drawer-detail"
         title={detail ? detail.name : "房间详情"}
         open={!!detailId}
         onClose={() => setDetailId(null)}

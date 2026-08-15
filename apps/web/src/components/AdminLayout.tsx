@@ -72,7 +72,7 @@ export default function AdminLayout() {
   const DrawerMenu = buildMenu(() => setDrawerOpen(false));
 
   return (
-    <Layout style={{ minHeight: "100vh" }}>
+    <Layout className="admin-shell">
       {/* 桌面端侧边栏（唯一导航）；移动端自动折叠 */}
       <Layout.Sider
         breakpoint="lg"
@@ -88,25 +88,14 @@ export default function AdminLayout() {
           overflow: "auto",
         }}
       >
-        <div
-          style={{
-            color: "#fff",
-            textAlign: "center",
-            padding: "16px 0",
-            fontSize: 16,
-            fontWeight: 600,
-          }}
-        >
-          酒局管家 · 后台
-        </div>
+        <div className="admin-brand"><div className="brand-lockup"><span className="brand-mark">酒</span><span><strong>酒局管家</strong><small>ADMIN CONSOLE</small></span></div></div>
         <SiderMenu />
       </Layout.Sider>
 
       <Layout>
         <Layout.Header
+          className="admin-header"
           style={{
-            background: "#fff",
-            padding: "0 16px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -128,7 +117,7 @@ export default function AdminLayout() {
             <span style={{ fontWeight: 500 }}>管理后台</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, color: "#666" }}>
+            <span className="header-user" style={{ fontSize: 13, color: "#666" }}>
               {user?.nickname || user?.username}
             </span>
             <Button type="text" size="small" onClick={() => navigate("/")}>
@@ -144,7 +133,7 @@ export default function AdminLayout() {
             </Button>
           </div>
         </Layout.Header>
-        <Layout.Content style={{ padding: 16 }}>
+        <Layout.Content className="admin-content">
           <Outlet />
         </Layout.Content>
       </Layout>

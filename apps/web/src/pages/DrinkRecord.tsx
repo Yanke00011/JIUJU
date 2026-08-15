@@ -123,7 +123,7 @@ export default function DrinkRecord() {
     productQuery.mutate(barcode.trim());
   };
 
-  const canSubmit = !!product && !!userId && createMutation.isPending;
+  const canSubmit = !!product && !!userId && !createMutation.isPending;
 
   return (
     <div>
@@ -158,10 +158,7 @@ export default function DrinkRecord() {
           />
         )}
 
-        <div
-          id={SCANNER_ID}
-          style={{ width: "100%", display: scanning ? "block" : "none" }}
-        />
+        <div className="scanner-frame" style={{ display: scanning ? "block" : "none" }}><div id={SCANNER_ID} style={{ width: "100%" }} /></div>
 
         {!scanning && !product && (
           <Button
@@ -221,7 +218,7 @@ export default function DrinkRecord() {
       )}
 
       {product && (
-        <Card size="small" title="确认酒品" style={{ marginBottom: 12 }}>
+        <Card className="product-confirm" title="确认酒品" style={{ marginBottom: 12 }}>
           <Descriptions column={1} size="small" labelStyle={{ width: 80 }}>
             <Descriptions.Item label="名称">{product.name}</Descriptions.Item>
             <Descriptions.Item label="品牌">
@@ -256,7 +253,8 @@ export default function DrinkRecord() {
               <Button
                 type="primary"
                 block
-                loading={canSubmit}
+                disabled={!canSubmit}
+                loading={createMutation.isPending}
                 onClick={() => createMutation.mutate()}
               >
                 确认登记

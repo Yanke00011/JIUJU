@@ -95,7 +95,7 @@ export default function RoomDetail() {
         返回
       </Button>
 
-      <Card style={{ marginBottom: 12 }}>
+      <Card className="room-hero" style={{ marginBottom: 16 }}>
         <div
           style={{
             display: "flex",
@@ -106,7 +106,7 @@ export default function RoomDetail() {
           <Typography.Title level={4} style={{ margin: 0 }}>
             {room.name}
           </Typography.Title>
-          <Tag color={status.color}>{status.text}</Tag>
+          <Tag color={room.status === "ACTIVE" ? "gold" : "default"}>{status.text}</Tag>
         </div>
 
         <Space
@@ -114,12 +114,7 @@ export default function RoomDetail() {
           size={4}
           style={{ marginTop: 12, width: "100%" }}
         >
-          <div style={{ fontSize: 14 }}>
-            <span style={{ color: "#999" }}>邀请码：</span>
-            <span style={{ fontWeight: 600, letterSpacing: 4, fontSize: 16 }}>
-              {room.inviteCode}
-            </span>
-          </div>
+          <div className="room-invite">邀请码 <b>{room.inviteCode}</b></div>
           <div style={{ fontSize: 13, color: "#999" }}>
             创建时间：{new Date(room.createdAt).toLocaleString("zh-CN")}
           </div>
@@ -133,7 +128,7 @@ export default function RoomDetail() {
 
       {/* 实时统计 */}
       <Card
-        size="small"
+        className="leaderboard"
         title={
           <span>
             <TrophyOutlined style={{ marginRight: 6, color: "#faad14" }} />
@@ -153,40 +148,19 @@ export default function RoomDetail() {
                 marginBottom: 12,
               }}
             >
-              <div
-                style={{
-                  textAlign: "center",
-                  background: "#f5f5f5",
-                  borderRadius: 8,
-                  padding: "8px 0",
-                }}
-              >
+              <div className="stat-tile">
                 <div style={{ fontSize: 18, fontWeight: 600 }}>
                   {stats.total.records}
                 </div>
                 <div style={{ fontSize: 12, color: "#999" }}>记录数</div>
               </div>
-              <div
-                style={{
-                  textAlign: "center",
-                  background: "#f5f5f5",
-                  borderRadius: 8,
-                  padding: "8px 0",
-                }}
-              >
+              <div className="stat-tile">
                 <div style={{ fontSize: 18, fontWeight: 600 }}>
                   {stats.total.totalQuantity}
                 </div>
                 <div style={{ fontSize: 12, color: "#999" }}>总数量</div>
               </div>
-              <div
-                style={{
-                  textAlign: "center",
-                  background: "#f5f5f5",
-                  borderRadius: 8,
-                  padding: "8px 0",
-                }}
-              >
+              <div className="stat-tile">
                 <div style={{ fontSize: 18, fontWeight: 600 }}>
                   {stats.total.totalVolumeMl.toLocaleString()}
                 </div>
@@ -204,52 +178,7 @@ export default function RoomDetail() {
                 style={{ padding: "12px 0" }}
               />
             ) : (
-              <List
-                size="small"
-                dataSource={stats.users}
-                renderItem={(user, index) => (
-                  <List.Item style={{ padding: "8px 0" }}>
-                    <List.Item.Meta
-                      avatar={
-                        <Avatar
-                          icon={<UserOutlined />}
-                          src={user.avatar || undefined}
-                          style={
-                            index === 0
-                              ? { backgroundColor: "#faad14" }
-                              : undefined
-                          }
-                        />
-                      }
-                      title={
-                        <span>
-                          {index + 1}. {user.nickname}
-                          {user.userId === userId && (
-                            <Tag color="blue" style={{ marginLeft: 8 }}>
-                              我
-                            </Tag>
-                          )}
-                        </span>
-                      }
-                    />
-                    <div style={{ width: "40%" }}>
-                      <Progress
-                        percent={
-                          maxUserAlcohol > 0
-                            ? Math.round(
-                                (user.alcoholMl / maxUserAlcohol) * 100,
-                              )
-                            : 0
-                        }
-                        size="small"
-                        format={() =>
-                          `${user.quantity}瓶 / ${user.alcoholMl}ml酒精`
-                        }
-                      />
-                    </div>
-                  </List.Item>
-                )}
-              />
+              <div>{stats.users.map((user, index) => <div className="rank-row" key={user.userId}><span className={`rank-no ${index === 0 ? "champion" : ""}`}>{index === 0 ? <TrophyOutlined /> : index + 1}</span><Avatar icon={<UserOutlined />} src={user.avatar || undefined} style={index === 0 ? { backgroundColor: "#e6a23c" } : undefined} /><span className="rank-label"><strong>{user.nickname}{user.userId === userId && <Tag color="processing" style={{ marginLeft: 6 }}>我</Tag>}</strong><Progress percent={maxUserAlcohol ? Math.round((user.alcoholMl / maxUserAlcohol) * 100) : 0} showInfo={false} size="small" /></span><span className="rank-value">{user.quantity} 瓶<br />{user.alcoholMl} ml</span></div>)}</div>
             )}
 
             <Typography.Text strong style={{ fontSize: 13 }}>

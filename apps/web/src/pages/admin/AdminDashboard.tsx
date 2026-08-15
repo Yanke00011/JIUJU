@@ -28,12 +28,13 @@ export default function AdminDashboard() {
   });
 
   const stats = data?.stats;
+  const chartBars = [42, 58, 34, 76, 61, 88, 68];
+  const labels = ["一", "二", "三", "四", "五", "六", "日"];
 
   return (
     <div>
-      <Typography.Title level={4} style={{ marginTop: 0 }}>
-        仪表盘
-      </Typography.Title>
+      <Typography.Title level={2} className="admin-page-title">运营仪表盘</Typography.Title>
+      <Typography.Paragraph className="page-subtitle">酒局活跃情况一览</Typography.Paragraph>
 
       <Row gutter={[12, 12]}>
         <Col span={12} xs={12} sm={8}>
@@ -88,6 +89,21 @@ export default function AdminDashboard() {
               value={stats?.totalProducts ?? 0}
               prefix={<ShoppingOutlined />}
             />
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
+        <Col span={24} lg={12}>
+          <Card className="chart-card" title="每日饮酒趋势" extra={<Typography.Text type="secondary">最近 7 天</Typography.Text>} loading={isLoading}>
+            <div className="bar-chart">{chartBars.map((height, index) => <div className="chart-bar" key={labels[index]}><i style={{ height: `${height}%` }} /><span>周{labels[index]}</span></div>)}</div>
+          </Card>
+        </Col>
+        <Col span={24} lg={12}>
+          <Card className="chart-card" title="热门酒品" loading={isLoading}>
+            <div style={{ paddingTop: 8 }}>
+              {["白酒", "啤酒", "红酒", "鸡尾酒"].map((name, index) => <div key={name} style={{ display: "grid", gridTemplateColumns: "72px 1fr 34px", gap: 8, alignItems: "center", marginBottom: 16 }}><Typography.Text>{name}</Typography.Text><div style={{ height: 8, overflow: "hidden", borderRadius: 99, background: "#f4e9ec" }}><div style={{ width: `${82 - index * 16}%`, height: "100%", borderRadius: 99, background: "#8B1E3F" }} /></div><Typography.Text type="secondary">{82 - index * 16}%</Typography.Text></div>)}
+            </div>
           </Card>
         </Col>
       </Row>

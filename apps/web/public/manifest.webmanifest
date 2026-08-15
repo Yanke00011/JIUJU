@@ -1,13 +1,13 @@
 {
-  "name": "酒局管家",
+  "name": "酒局管家 · JIUJU",
   "short_name": "酒局管家",
-  "description": "扫码记录饮酒，朋友聚会防逃酒",
+  "description": "扫码记录每一杯酒，让聚会更公平",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#1677ff",
-  "theme_color": "#1677ff",
+  "background_color": "#8B1E3F",
+  "theme_color": "#8B1E3F",
   "icons": [
     {
       "src": "/icons/icon-192.png",

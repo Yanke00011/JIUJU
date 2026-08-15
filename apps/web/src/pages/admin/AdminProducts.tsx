@@ -179,7 +179,7 @@ export default function AdminProducts() {
           marginBottom: 12,
         }}
       >
-        <Typography.Title level={4} style={{ margin: 0 }}>
+        <Typography.Title level={2} className="admin-page-title">
           商品管理
         </Typography.Title>
         <Button
@@ -194,7 +194,7 @@ export default function AdminProducts() {
         </Button>
       </div>
 
-      <Input.Search
+      <div className="admin-toolbar"><Input.Search
         placeholder="搜索条码 / 名称 / 品牌"
         allowClear
         style={{ maxWidth: 320, marginBottom: 12 }}
@@ -202,7 +202,7 @@ export default function AdminProducts() {
           setKeyword(v);
           setPage(1);
         }}
-      />
+      /></div>
 
       <Table<AdminProduct>
         rowKey="id"
