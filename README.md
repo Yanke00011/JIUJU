@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1-13 已完成）
+## 当前进度（Phase 1-15 已完成）
 
-当前阶段为 **Phase 1-13：后端（数据库/认证/用户/房间/成员/酒品/饮酒记录/统计/Admin/日志/生产部署）+ 用户 Web 前端**，已完成：
+当前阶段为 **Phase 1-15：后端 + 用户 Web + 产品化优化 + PWA + Admin 管理后台**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -92,9 +92,20 @@
   - 状态管理：Zustand 保存 token 与用户信息（持久化到 localStorage）
   - 路由：`PrivateRoute` 未登录跳转 `/login`
   - 移动端友好（Ant Design + 移动优先布局 + 底部固定登记按钮），环境变量 `VITE_API_BASE_URL`（开发环境用 Vite 代理 `/api`）
-  - 未实现：微信小程序、Admin 后台页面、支付、社交分享、AI 功能
+- 产品化优化（Phase 15）：
+  - 首页改造：未登录展示产品介绍（酒局管家/扫码记录饮酒/防逃酒 + 登录/注册按钮），已登录展示我的酒局
+  - UI 全面优化：统一 Ant Design 设计语言，移动端优先，补齐 loading / empty / error / 成功反馈，无空白页与英文报错
+  - 登录/注册体验：错误密码显示「用户名或密码错误」、网络失败「网络连接失败」、服务器异常「服务器异常」；注册成功后自动切回登录
+  - PWA：`manifest.webmanifest` + Service Worker + 图标（192/512），支持添加到手机桌面
+  - Admin 管理后台（`/admin`，需 ADMIN / SUPER_ADMIN，普通用户自动跳转）：
+    - Dashboard：用户/房间/饮酒记录/商品数量
+    - 用户管理：查看、禁用/恢复（`GET/PATCH /admin/users*`）
+    - 房间管理：列表与详情（成员数、记录数、统计摘要）
+    - 商品管理：列表与编辑（不允许改 barcode）
+    - 操作日志：列表（按操作/对象过滤）、详情（JSON）
+  - 未实现：微信小程序、支付、社交分享、AI 功能
 
-尚未实现（属于后续 Phase）：Admin Web、微信小程序。
+尚未实现（属于后续 Phase）：微信小程序。
 
 ## 核心功能
 
@@ -577,6 +588,19 @@ Swagger 必须提供在：
 - 操作日志：可追踪管理员、动作、目标、详情、IP、User-Agent 与时间。
 
 `SUPER_ADMIN` 拥有全部权限；`ADMIN` 可管理用户、房间、酒品、饮酒记录与统计。后续若需要再增加更细的 `OPERATOR` 角色。
+
+### 密码找回（当前未实现）
+
+**当前状态：密码找回未实现。** 后端目前只有注册、登录、当前用户三个认证接口，不包含 `forgot password` / `reset password`，前端也未提供假功能入口。
+
+预留的未来接口设计（规划，尚未开发）：
+
+- `POST /api/v1/auth/forgot-password`：请求重置密码。请求体 `{ email }`（或手机号），服务端生成一次性 `resetToken`（短时有效，如 15-30 分钟）并发送邮件/短信；为防用户枚举，无论账号是否存在都返回成功。
+- `POST /api/v1/auth/reset-password`：使用 `resetToken` 设置新密码。请求体 `{ resetToken, newPassword }`，新密码需满足与注册相同的复杂度（至少 8 位且含字母和数字），校验后写入 Argon2 哈希并使其旧 token 失效。
+- 辅助：数据库需为 `User` 增加可空字段（如 `resetTokenHash` / `resetTokenExpiresAt`），或引入独立的 `PasswordResetToken` 表。
+- 前端页面：`/forgot-password` 与 `/reset-password`，入口放在登录页。
+
+> 说明：实现上述功能前需完成邮件/短信发送能力的接入与相关安全评审（防枚举、防暴力、token 单次使用）。
 
 ## 测试与质量检查
 

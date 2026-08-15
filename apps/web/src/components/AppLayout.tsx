@@ -1,14 +1,19 @@
 import { Layout, Button } from "antd";
 import { Outlet, useNavigate } from "react-router-dom";
+import type { ReactNode } from "react";
 import { useAuthStore } from "../store/auth";
 
 /**
  * 移动端友好的基础布局：顶部栏 + 内容区。
+ * 支持两种用法：
+ * 1. 作为路由布局组件，通过 <Outlet /> 渲染子路由；
+ * 2. 直接传入 children 渲染内容。
  */
-export default function AppLayout() {
+export default function AppLayout({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
 
   const handleLogout = () => {
     logout();
@@ -40,6 +45,16 @@ export default function AppLayout() {
           酒局管家
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {isAdmin && (
+            <Button
+              size="small"
+              type="text"
+              style={{ color: "#fff" }}
+              onClick={() => navigate("/admin")}
+            >
+              管理后台
+            </Button>
+          )}
           <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 13 }}>
             {user?.nickname || user?.username}
           </span>
@@ -62,7 +77,7 @@ export default function AppLayout() {
           boxSizing: "border-box",
         }}
       >
-        <Outlet />
+        {children ?? <Outlet />}
       </Layout.Content>
     </Layout>
   );

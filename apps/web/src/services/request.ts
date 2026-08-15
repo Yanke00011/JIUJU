@@ -27,10 +27,16 @@ request.interceptors.response.use(
     const serverMessage = error.response?.data?.error?.message;
 
     if (status === 401) {
-      // 登录过期或凭证无效：清除本地状态并跳转登录页
+      const onAuthPage =
+        window.location.pathname === "/login" ||
+        window.location.pathname === "/register";
       useAuthStore.getState().logout();
-      if (window.location.pathname !== "/login") {
-        message.warning("登录已过期，请重新登录");
+      if (onAuthPage) {
+        // 登录/注册页：显示服务端提示（如“用户名或密码错误”），不跳转
+        message.error(serverMessage || "用户名或密码错误");
+      } else {
+        // 其他页面：登录过期，跳转登录页
+        message.warning(serverMessage || "登录已过期，请重新登录");
         window.location.href = "/login";
       }
       return Promise.reject(error);
@@ -46,12 +52,17 @@ request.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    if (status !== undefined && status >= 500) {
+      message.error(serverMessage || "服务器异常，请稍后重试");
+      return Promise.reject(error);
+    }
+
     if (error.response) {
       message.error(serverMessage || "请求失败，请稍后重试");
     } else if (error.code === "ECONNABORTED") {
       message.error("请求超时，请稍后重试");
     } else {
-      message.error("网络异常，请检查网络连接");
+      message.error("网络连接失败，请检查网络");
     }
 
     return Promise.reject(error);
@@ -71,6 +82,17 @@ export function post<T>(
 ): Promise<T> {
   return request
     .post<ApiResponse<T>>(url, data, config)
+    .then((res) => res.data.data);
+}
+
+/** 统一 PATCH */
+export function patch<T>(
+  url: string,
+  data?: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  return request
+    .patch<ApiResponse<T>>(url, data, config)
     .then((res) => res.data.data);
 }
 

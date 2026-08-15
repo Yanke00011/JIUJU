@@ -1,0 +1,25 @@
+{
+  "name": "酒局管家",
+  "short_name": "酒局管家",
+  "description": "扫码记录饮酒，朋友聚会防逃酒",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1677ff",
+  "theme_color": "#1677ff",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

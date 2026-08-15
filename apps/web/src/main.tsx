@@ -24,3 +24,14 @@ createRoot(document.getElementById("root")!).render(
     </ConfigProvider>
   </StrictMode>,
 );
+
+// PWA：注册 Service Worker（仅在生产环境，避免开发热更新缓存干扰）
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .catch((err) => {
+        console.error("Service Worker 注册失败", err);
+      });
+  });
+}
