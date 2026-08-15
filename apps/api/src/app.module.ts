@@ -7,6 +7,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { ProductsModule } from './products/products.module';
 import { RoomMembersModule } from './room-members/room-members.module';
 import { RoomModule } from './rooms/rooms.module';
 import { UserModule } from './users/users.module';
@@ -29,6 +30,7 @@ import { UserModule } from './users/users.module';
     UserModule,
     RoomModule,
     RoomMembersModule,
+    ProductsModule,
   ],
   providers: [
     {

@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1-6 已完成）
+## 当前进度（Phase 1-7 已完成）
 
-当前阶段为 **Backend First · Phase 1-6：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员**，已完成：
+当前阶段为 **Backend First · Phase 1-7：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -45,8 +45,14 @@
 - 退出：普通成员可退出（仅删除 RoomMember，不影响 User/Room/历史记录）；房主退出 409 `OWNER_CANNOT_LEAVE`
 - 移除成员：仅房主可操作（非房主 403 `ROOM_NOT_OWNER`）；不能移除房主 409 `CANNOT_REMOVE_OWNER`；已结束房间禁止写操作
 - Room Members 单元测试与 E2E 测试（加入/并发/大小写/列表排序/权限/ENDED 规则等）
+- Products：按条形码查询 / 按 ID 查询 / 创建 / 修改（`GET /api/v1/products/barcode/:barcode`、`GET /api/v1/products/:id`、`POST /api/v1/products`、`PATCH /api/v1/products/:id`）
+- barcode 校验：trim 后仅允许 8-14 位数字（支持 EAN-13，兼容 EAN-8 / UPC-A）；不存在的条码统一 404 `PRODUCT_NOT_FOUND`，不自动创建商品
+- 创建商品：barcode 唯一（捕获 P2002 → `PRODUCT_ALREADY_EXISTS`，含并发）；`name` 1-100、`brand` 0-100、`category` 使用现有 `ProductCategory` 枚举、`volumeMl` 1-10000、`alcoholPercent` 0-100
+- 修改商品：仅允许 name/brand/category/volumeMl/alcoholPercent；不允许修改 id 与 barcode
+- Product 是全局商品数据，登录用户即可查询/创建/修改；V1 禁止删除（未来会被 DrinkRecord 引用）
+- Products 单元测试与 E2E 测试（barcode 查询/trim/格式/长度、重复与并发创建、修改、非法 category/volumeMl/alcoholPercent、不可删等）
 
-尚未实现（属于后续 Phase）：酒品、饮酒记录、统计、Admin API、用户 Web、Admin Web、微信小程序。
+尚未实现（属于后续 Phase）：饮酒记录、统计、Admin API、用户 Web、Admin Web、微信小程序。
 
 ## 核心功能
 
@@ -345,6 +351,12 @@ pnpm prisma db seed                               # 写入种子数据
   - `POST /api/v1/rooms/:id/members/leave`：普通成员退出（仅删除 RoomMember，不影响 User/Room/历史 DrinkRecord）；房主不能退出 409 `OWNER_CANNOT_LEAVE`；已结束房间禁止退出 409 `ROOM_ENDED`。
   - `DELETE /api/v1/rooms/:id/members/:userId`：房主移除普通成员；非房主 403 `ROOM_NOT_OWNER`；不能移除房主 409 `CANNOT_REMOVE_OWNER`；已结束房间禁止移除 409 `ROOM_ENDED`。
   - 身份一律来自 JWT `sub`；禁止 body 指定 `userId`；ENDED 房间允许查看成员（历史可查），但禁止加入/退出/移除。
+- `Products`（酒品，全部需要 JWT）：
+  - `GET /api/v1/products/barcode/:barcode`：按条形码查询商品。barcode 需为 8-14 位数字（支持 EAN-13，兼容 EAN-8 / UPC-A）；不存在统一 404 `PRODUCT_NOT_FOUND`（不自动创建商品）。
+  - `GET /api/v1/products/:id`：按 ID 查询商品；不存在 404。
+  - `POST /api/v1/products`：创建商品。`barcode` 唯一（重复/并发返回 409 `PRODUCT_ALREADY_EXISTS`）；`name` 1-100、`brand` 0-100、`category` 为 `ProductCategory` 枚举、`volumeMl` 1-10000、`alcoholPercent` 0-100。
+  - `PATCH /api/v1/products/:id`：修改商品，仅允许 `name/brand/category/volumeMl/alcoholPercent`；不允许修改 `id` 与 `barcode`（barcode 是商品核心身份，V1 不可改）。
+  - Product 是全局商品数据，登录用户即可查询/创建/修改；V1 禁止删除（`DELETE /api/v1/products/:id` 不存在），因为未来会被 DrinkRecord 引用，删除会破坏历史记录。
 - `Products`：如 `GET /api/v1/products/barcode/:barcode`；找不到时返回 `PRODUCT_NOT_FOUND`。
 - `Drinks`：`POST /api/v1/rooms/:roomId/drinks`。创建前依次校验 JWT、登记人房间成员身份、房间为 `ACTIVE`、酒品存在、实际饮用者属于房间、幂等键，然后创建或返回原记录。
 - `Stats`：房间汇总、成员排行、酒品排行与历史记录。
