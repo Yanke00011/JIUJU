@@ -1,5 +1,6 @@
 import {
   ArgumentsHost,
+  BadRequestException,
   Catch,
   ExceptionFilter,
   HttpException,
@@ -61,7 +62,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       } else if (exceptionStatus === HttpStatus.NOT_FOUND) {
         status = exceptionStatus;
         error = { code: 'NOT_FOUND', message: '资源不存在' };
-      } else if (this.isValidationResponse(exceptionResponse)) {
+      } else if (
+        exception instanceof BadRequestException &&
+        this.isValidationResponse(exceptionResponse)
+      ) {
         status = exceptionStatus;
         error = {
           code: 'VALIDATION_ERROR',

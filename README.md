@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1、2 已完成）
+## 当前进度（Phase 1、2、3 已完成）
 
-当前阶段为 **Backend First · Phase 1 + Phase 2：项目初始化 + 数据库**，已完成：
+当前阶段为 **Backend First · Phase 1 + Phase 2 + Phase 3：项目初始化 + 数据库 + 认证**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -26,8 +26,13 @@
 - 基础单元测试与 E2E 测试、构建脚本、README
 - Prisma Schema（User / Room / RoomMember / Product / DrinkRecord / OperationLog）
 - 初始迁移（`prisma/migrations/<timestamp>_init`）与 Seed（`prisma/seed.ts`）
+- Auth：注册、登录、当前用户（`POST /api/v1/auth/register`、`POST /api/v1/auth/login`、`GET /api/v1/auth/me`）
+- JWT（`@nestjs/jwt`，payload 仅含 `sub`/`role`）+ 全局 `JwtAuthGuard` + `@Public()` 装饰器
+- Argon2id 密码哈希（`@node-rs/argon2`，参数与 seed 一致）
+- 登录限流（10 次/分钟）与注册限流（20 次/分钟），全局默认 100 次/分钟
+- Auth 单元测试与 E2E 测试（注册/登录/me、无 token/无效/过期 token、禁用用户等）
 
-尚未实现（属于后续 Phase）：注册/登录、JWT、房间、成员、酒品、饮酒记录、统计、Admin API、用户 Web、Admin Web、微信小程序。
+尚未实现（属于后续 Phase）：房间、成员、酒品、饮酒记录、统计、Admin API、用户 Web、Admin Web、微信小程序。
 
 ## 核心功能
 
@@ -302,6 +307,11 @@ pnpm prisma db seed                               # 写入种子数据
 主要接口范围：
 
 - `Auth`：注册、登录、当前用户。
+  - `POST /api/v1/auth/register`：注册。`username` 3-32 位（字母/数字/`_`/`-`），`password` 8-128 位且至少包含一个字母和一个数字，`nickname` 1-50 位；用户名重复返回 `USERNAME_TAKEN`（409）。
+  - `POST /api/v1/auth/login`：登录，返回 `{ accessToken, tokenType, expiresIn, user }`；失败统一返回 `UNAUTHORIZED`（"用户名或密码错误"），不区分用户是否存在或已被禁用；成功时以数据库时间更新 `lastLoginAt`。
+  - `GET /api/v1/auth/me`：需要 `Authorization: Bearer <token>`，返回当前用户；无/无效/过期 token 返回 401，被禁用用户返回 401 `USER_DISABLED`。
+  - JWT payload 仅含 `sub`（用户 ID）与 `role`，不包含任何敏感字段。
+  - 限流：登录 10 次/分钟、注册 20 次/分钟（基于 IP）。
 - `Rooms` 与 `Members`：创建、加入、退出、成员、结束与房间权限。
 - `Products`：如 `GET /api/v1/products/barcode/:barcode`；找不到时返回 `PRODUCT_NOT_FOUND`。
 - `Drinks`：`POST /api/v1/rooms/:roomId/drinks`。创建前依次校验 JWT、登记人房间成员身份、房间为 `ACTIVE`、酒品存在、实际饮用者属于房间、幂等键，然后创建或返回原记录。
@@ -398,16 +408,17 @@ docker compose up -d postgres
 | Phase | 内容 |
 | --- | --- |
 | 1 | 初始化 Monorepo、NestJS、Prisma、PostgreSQL、Docker、Health API、测试与 Swagger；验证基础服务可启动和连接。 |
-| 2 | 用户系统：注册、登录、JWT、当前用户。 |
-| 3 | 房间：创建、加入、退出、成员、邀请码、权限。 |
-| 4 | 酒品：Product、条码、创建与查询。 |
-| 5 | 扫码：手机摄像头、EAN-13、EAN-8、UPC、Code128、QR 与手动输入。 |
-| 6 | 饮酒记录：确认酒品、选择饮用者、登记与幂等防重。 |
-| 7 | 统计：瓶数、毫升、成员排行、酒品统计、历史记录。 |
-| 8 | 用户 UI：移动端优先、响应式、扫码体验、Loading、错误提示、空状态。 |
-| 9 | 安全：限流、CORS、权限、输入验证、日志。 |
-| 10 | 生产部署：Docker、HTTPS、环境变量、数据库持久化、备份。 |
-| 11–16 | 仅在前序能力稳定并获得确认后，继续完成 Admin Web、体验优化、集成测试、部署完善与后续规划中的扩展。 |
+| 2 | 数据库：Prisma Schema、迁移与 Seed。 |
+| 3 | 用户系统：注册、登录、JWT、当前用户。 |
+| 4 | 房间：创建、加入、退出、成员、邀请码、权限。 |
+| 5 | 酒品：Product、条码、创建与查询。 |
+| 6 | 扫码：手机摄像头、EAN-13、EAN-8、UPC、Code128、QR 与手动输入。 |
+| 7 | 饮酒记录：确认酒品、选择饮用者、登记与幂等防重。 |
+| 8 | 统计：瓶数、毫升、成员排行、酒品统计、历史记录。 |
+| 9 | 用户 UI：移动端优先、响应式、扫码体验、Loading、错误提示、空状态。 |
+| 10 | 安全：限流、CORS、权限、输入验证、日志。 |
+| 11 | 生产部署：Docker、HTTPS、环境变量、数据库持久化、备份。 |
+| 12–16 | 仅在前序能力稳定并获得确认后，继续完成 Admin Web、体验优化、集成测试、部署完善与后续规划中的扩展。 |
 
 提交信息示例：
 
