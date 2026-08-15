@@ -1,8 +1,16 @@
 // 酒局管家 JIUJU 数据库 Schema
 //
-// Phase 1：仅初始化 Prisma 与 PostgreSQL 连接。
-// 业务模型（User / Room / RoomMember / Product / DrinkRecord / OperationLog）
-// 将在 Phase 2（数据库）中新增，并通过 `prisma migrate dev` 生成迁移。
+// Phase 2：V1 核心业务模型。
+// 业务模型：User / Room / RoomMember / Product / DrinkRecord / OperationLog
+//
+// 重要规则：
+// - 所有时间字段使用带时区的 timestamptz（UTC 存储，API 使用 ISO 8601）
+// - 所有主键使用 PostgreSQL uuid
+// - 用户与房间之间通过 RoomMember 关联（roomId + userId 联合唯一）
+// - Product 是"商品"（barcode 唯一），DrinkRecord 是"实际登记的一瓶酒"（barcode 不唯一）
+// - DrinkRecord 使用软删除（deletedAt / deletedBy / deleteReason）
+// - 密码只保存哈希（passwordHash），永不明文；API 永不返回 passwordHash
+// - 只对明确需要的查询建立索引，避免机械创建无用索引
 
 generator client {
   provider = "prisma-client-js"
@@ -11,4 +19,188 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum RoomStatus {
+  ACTIVE
+  ENDED
+}
+
+enum RoomMemberRole {
+  OWNER
+  MEMBER
+}
+
+enum ProductCategory {
+  BAIJIU
+  BEER
+  RED_WINE
+  WHITE_WINE
+  SPIRITS
+  COCKTAIL
+  OTHER
+}
+
+// ============================================================
+// User
+// ============================================================
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  username     String     @unique @db.VarChar(50)
+  passwordHash String     @db.VarChar(255)
+  nickname     String     @db.VarChar(50)
+  avatar       String?    @db.VarChar(500)
+  status       UserStatus @default(ACTIVE)
+  role         UserRole   @default(USER)
+  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime   @updatedAt @db.Timestamptz(3)
+  lastLoginAt  DateTime?  @db.Timestamptz(3)
+
+  // User 同时扮演多个角色，关系必须显式命名以避免 Prisma relation ambiguity
+  ownedRooms          Room[]        @relation("RoomOwner")
+  roomMemberships     RoomMember[]  @relation("RoomMemberUser")
+  drinkRecords        DrinkRecord[] @relation("DrinkRecordUser") // 实际饮用者
+  createdDrinkRecords DrinkRecord[] @relation("DrinkRecordCreatedBy") // 登记人
+  deletedDrinkRecords DrinkRecord[] @relation("DrinkRecordDeletedBy") // 软删除执行人
+  operationLogs       OperationLog[] @relation("OperationLogAdmin")
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================
+// Room
+// ============================================================
+
+model Room {
+  id         String     @id @default(uuid()) @db.Uuid
+  name       String     @db.VarChar(100)
+  ownerId    String     @db.Uuid
+  inviteCode String     @unique @db.VarChar(6) // 6 位大写字母+数字，排除 O/0/I/1
+  status     RoomStatus @default(ACTIVE)
+  createdAt  DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime   @updatedAt @db.Timestamptz(3)
+  endedAt    DateTime?  @db.Timestamptz(3)
+
+  owner        User          @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members      RoomMember[]
+  drinkRecords DrinkRecord[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================
+// RoomMember
+// ============================================================
+
+model RoomMember {
+  id       String         @id @default(uuid()) @db.Uuid
+  roomId   String         @db.Uuid
+  userId   String         @db.Uuid
+  role     RoomMemberRole @default(MEMBER)
+  joinedAt DateTime       @default(now()) @db.Timestamptz(3)
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation("RoomMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId]) // 一个用户不能重复加入同一个房间
+  @@index([userId])
+}
+
+// ============================================================
+// Product（商品：一个条码对应一种商品，不是某一瓶酒）
+// ============================================================
+
+model Product {
+  id             String          @id @default(uuid()) @db.Uuid
+  barcode        String          @unique @db.VarChar(32)
+  name           String          @db.VarChar(200)
+  brand          String?         @db.VarChar(100)
+  category       ProductCategory @default(OTHER)
+  volumeMl       Int
+  alcoholPercent Decimal?        @db.Decimal(4, 2)
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
+
+  drinkRecords DrinkRecord[]
+
+  @@index([name])
+  @@index([brand])
+  @@index([createdAt])
+}
+
+// ============================================================
+// DrinkRecord（实际登记的一瓶/一次饮酒记录）
+// ============================================================
+
+model DrinkRecord {
+  id              String    @id @default(uuid()) @db.Uuid
+  roomId          String    @db.Uuid
+  productId       String    @db.Uuid
+  userId          String    @db.Uuid // 实际饮用者
+  createdBy       String    @db.Uuid // 实际登记操作者，禁止信任前端传入
+  barcode         String    @db.VarChar(32) // 快照，允许重复
+  volumeMl        Int
+  quantity        Int       @default(1) // V1 固定为 1
+  clientRequestId String    @db.Uuid // 幂等键，客户端生成
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt       DateTime? @db.Timestamptz(3) // 软删除
+  deletedBy       String?   @db.Uuid
+  deleteReason    String?   @db.VarChar(500)
+
+  room          Room     @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  user          User     @relation("DrinkRecordUser", fields: [userId], references: [id], onDelete: Restrict)
+  createdByUser User     @relation("DrinkRecordCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  deletedByUser User?    @relation("DrinkRecordDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+
+  @@unique([roomId, clientRequestId]) // 幂等：同一房间同一请求只能有一条记录
+  @@index([roomId, createdAt])
+  @@index([roomId, deletedAt])
+  @@index([productId])
+  @@index([userId])
+  @@index([createdBy])
+  @@index([deletedAt])
+}
+
+// ============================================================
+// OperationLog（管理员操作日志）
+// ============================================================
+
+model OperationLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  adminUserId String?  @db.Uuid // 可空：管理员被删除后日志仍保留（SetNull）
+  action      String   @db.VarChar(100)
+  targetType  String   @db.VarChar(50)
+  targetId    String   @db.VarChar(100)
+  details     String?  @db.Text
+  ip          String?  @db.VarChar(64)
+  userAgent   String?  @db.VarChar(500)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  admin User? @relation("OperationLogAdmin", fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([adminUserId])
+  @@index([action])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }

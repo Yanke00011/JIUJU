@@ -6,4 +6,7 @@ loadEnv({ path: 'apps/api/.env' });
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
+  migrations: {
+    seed: 'ts-node prisma/seed.ts',
+  },
 });

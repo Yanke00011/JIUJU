@@ -21,11 +21,16 @@
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:seed": "prisma db seed"
   },
   "devDependencies": {
+    "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.5.0",
+    "@types/node": "^20.17.0",
     "dotenv": "^16.4.7",
-    "prisma": "^6.5.0"
+    "prisma": "^6.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
   }
 }

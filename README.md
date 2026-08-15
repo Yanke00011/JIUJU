@@ -12,21 +12,22 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1 已完成）
+## 当前进度（Phase 1、2 已完成）
 
-当前阶段为 **Backend First · Phase 1：项目初始化**，已完成：
+当前阶段为 **Backend First · Phase 1 + Phase 2：项目初始化 + 数据库**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
-- Prisma（`prisma/schema.prisma` + `prisma.config.ts`）
 - PostgreSQL Docker（`docker-compose.yml`，`docker compose up -d postgres`）
 - 环境变量（`apps/api/.env.example`）
 - Swagger（`/api/docs`，同时输出 `/api/docs-json` OpenAPI JSON）
 - Health API（`GET /api/v1/health`）
 - 全局 `ValidationPipe`、统一异常处理、统一响应包装、基础请求日志、Helmet、CORS
 - 基础单元测试与 E2E 测试、构建脚本、README
+- Prisma Schema（User / Room / RoomMember / Product / DrinkRecord / OperationLog）
+- 初始迁移（`prisma/migrations/<timestamp>_init`）与 Seed（`prisma/seed.ts`）
 
-尚未实现（属于后续 Phase）：用户、注册/登录、JWT、房间、成员、酒品、饮酒记录、统计、Admin、用户 Web、Admin Web、微信小程序。
+尚未实现（属于后续 Phase）：注册/登录、JWT、房间、成员、酒品、饮酒记录、统计、Admin API、用户 Web、Admin Web、微信小程序。
 
 ## 核心功能
 
@@ -187,35 +188,69 @@ Prisma CLI 通过根目录 `prisma.config.ts` 加载 `apps/api/.env`。
 
 ## 数据库与 Prisma
 
-核心模型包括：
+数据库：PostgreSQL。所有主键为 `UUID`；所有时间字段使用带时区的 `TIMESTAMPTZ`（UTC 存储，API 返回 ISO 8601）。
+
+### 数据模型
 
 | 模型 | 责任 |
 | --- | --- |
-| `User` | 用户名、密码哈希、昵称、头像、状态、全局角色、登录时间 |
+| `User` | 用户名、密码哈希、昵称、头像、状态、全局角色、注册/更新时间、最后登录时间 |
 | `Room` | 房间名称、唯一邀请码、房主、状态与结束时间 |
 | `RoomMember` | 房间成员与房间内角色（`OWNER` / `MEMBER`） |
-| `Product` | 唯一商品条码、品牌、名称、容量、酒精度、类型与状态 |
-| `DrinkRecord` | 房间、酒品、实际饮用者、登记人、条码、容量、幂等键与软删除信息 |
-| `OperationLog` | 管理员操作、目标、详情、IP、User-Agent 与时间 |
+| `Product` | 商品（唯一条码、品牌、名称、品类、容量、酒精度） |
+| `DrinkRecord` | 实际登记的一瓶/一次饮酒记录（房间、酒品、饮用者、登记人、条码快照、容量、幂等键、软删除） |
+| `OperationLog` | 管理员操作日志（操作者、动作、目标、详情、IP、User-Agent） |
 
-关键约束：
+### 枚举
 
-- `User.username` 唯一；密码最少 8 位，只保存安全哈希，不返回 `passwordHash`。
-- `Room.inviteCode` 唯一；房间状态为 `ACTIVE` 或 `ENDED`。
-- `RoomMember` 必须有联合唯一约束：`UNIQUE(roomId, userId)`。
-- `Product.barcode` 唯一。
-- `DrinkRecord` 使用联合唯一约束：`UNIQUE(roomId, clientRequestId)`；重复请求返回原记录。
-- `DrinkRecord.userId` 是实际饮用者；`createdBy` 是登记人，二者必须区分。
-- 删除饮酒记录使用软删除：`deletedAt`、`deletedBy`、`deleteReason`。默认查询与统计必须排除已删除记录。
-- 数据库统一使用 UTC；API 使用 ISO 8601；前端按用户本地时区显示。
+| 枚举 | 取值 |
+| --- | --- |
+| `UserRole` | `USER` / `ADMIN` / `SUPER_ADMIN` |
+| `UserStatus` | `ACTIVE` / `DISABLED` |
+| `RoomStatus` | `ACTIVE` / `ENDED` |
+| `RoomMemberRole` | `OWNER` / `MEMBER` |
+| `ProductCategory` | `BAIJIU` / `BEER` / `RED_WINE` / `WHITE_WINE` / `SPIRITS` / `COCKTAIL` / `OTHER` |
+
+### 关系与删除策略
+
+- `User` ↔ `Room`：`Room.ownerId → User.id`，`ON DELETE RESTRICT`。
+- `User` ↔ `RoomMember`：用户通过 `RoomMember` 加入房间；`RoomMember.roomId → Room.id` 与 `RoomMember.userId → User.id` 均为 `ON DELETE CASCADE`（纯关联行）。
+- `DrinkRecord`：`roomId / productId / userId（饮用者）/ createdBy（登记人）` 均 `ON DELETE RESTRICT`；`deletedBy（软删除执行人）` 为 `ON DELETE SET NULL`，保证记录可追溯。
+- `OperationLog.adminUserId → User.id`：`ON DELETE SET NULL`，删除管理员后日志仍保留。
+- Prisma 关系名已显式命名，避免 `User` 多角色关联产生 ambiguity：`RoomOwner`、`RoomMemberUser`、`DrinkRecordUser`、`DrinkRecordCreatedBy`、`DrinkRecordDeletedBy`、`OperationLogAdmin`。
+
+### 唯一约束
+
+- `User.username` 唯一。
+- `Room.inviteCode` 唯一（6 位，大写字母与数字，业务层排除 `O/0/I/1`）。
+- `RoomMember`：`UNIQUE(roomId, userId)`，同一用户不能重复加入同一房间。
+- `Product.barcode` 唯一（一种商品一个条码）。
+- `DrinkRecord`：`UNIQUE(roomId, clientRequestId)` 幂等键，重复请求返回原记录。
+
+### 其他约束
+
+- 密码最少 8 位，只保存 Argon2 哈希（`passwordHash`），任何 API 不得返回 `passwordHash`。
+- `DrinkRecord.userId` 是实际饮用者；`createdBy` 是执行登记的人，二者必须区分。
+- `DrinkRecord` 删除使用软删除：`deletedAt`、`deletedBy`、`deleteReason`；默认查询与统计必须排除已删除记录。
+- `Product` 是“商品”，`DrinkRecord` 是“实际登记的一瓶酒”，二者是两个模型，禁止混用。
+- 房间结束后禁止新增成员与饮酒记录属于业务层规则（后续 Phase 实现），数据库结构已支持。
+
+### Migration 与 Seed
 
 数据库变更必须使用 Prisma Migration：
 
 ```bash
-pnpm prisma migrate dev --name <migration-name>
+pnpm prisma migrate dev --name <migration-name>   # 开发环境生成并应用迁移
+pnpm prisma migrate deploy                        # 生产环境应用迁移
+pnpm prisma generate                              # 重新生成 Prisma Client
+pnpm prisma db seed                               # 写入种子数据
 ```
 
-禁止把 `prisma db push` 作为生产部署方式。每次正式变更应有可追踪的迁移文件。`prisma/seed.ts` 应创建超级管理员、测试用户与测试酒品；管理员密码通过环境变量提供。
+已存在初始迁移：`prisma/migrations/<timestamp>_init`。
+
+`prisma/seed.ts` 创建 `SUPER_ADMIN`（`admin`，密码来自环境变量 `SEED_ADMIN_PASSWORD`）、测试用户（`testuser`）与 3 个测试酒品，使用 `upsert` 可重复执行。禁止把真实密码硬编码到 Git。
+
+禁止把 `prisma db push` 作为生产部署方式。
 
 ## API 与 Swagger
 
