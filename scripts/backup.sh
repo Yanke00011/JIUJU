@@ -23,11 +23,18 @@ mkdir -p "$BACKUP_DIR"
 TS="$(date +%Y%m%d_%H%M%S)"
 FILE="$BACKUP_DIR/backup_${TS}.sql.gz"
 
+# 自动检测容器：优先生产 jiuju-prod-postgres，否则开发 jiuju-postgres
+if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
+  if docker ps --format '{{.Names}}' | grep -qx "jiuju-postgres"; then
+    CONTAINER="jiuju-postgres"
+  fi
+fi
+
 if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
   echo "→ 使用容器 $CONTAINER 备份..."
   docker exec "$CONTAINER" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner | gzip > "$FILE"
 else
-  echo "→ 容器 $CONTAINER 未运行，尝试本机 pg_dump..."
+  echo "→ 未找到生产/开发容器，尝试本机 pg_dump..."
   pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner 2>/dev/null | gzip > "$FILE" \
     || { echo "✗ 备份失败：未找到容器或本机 pg_dump 不可用"; exit 1; }
 fi

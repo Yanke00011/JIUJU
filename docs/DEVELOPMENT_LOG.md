@@ -6,6 +6,16 @@
 
 ---
 
+## Phase 17.5.2 — 备份脚本可用性修复与验证
+
+- **状态**：已完成
+- **问题**：`scripts/backup.sh` 只检测生产容器 `jiuju-prod-postgres`，开发容器 `jiuju-postgres` 会落入「本机 pg_dump」分支而失败。
+- **修复**：脚本自动检测容器（优先 `jiuju-prod-postgres`，其次 `jiuju-postgres`，最后才尝试本机 `pg_dump`）。
+- **验证（备份→恢复往返）**：在 `jiuju-postgres` 上执行备份（36K，gzip 完整性 OK，含全部 7 张表）；恢复到临时库 `jiuju_restore_test`：users=3/rooms=2/drinks=4/members=3 与源完全一致，用户角色（admin=SUPER_ADMIN / testuser=USER / zhangyanke=ADMIN）匹配；验证后删除临时库与备份文件。
+- **Git commit**：`fix: backup script auto-detect postgres container`
+
+---
+
 ## Phase 17.5.1 — 前端默认 API 前缀统一为 /api/v1
 
 - **状态**：已完成
