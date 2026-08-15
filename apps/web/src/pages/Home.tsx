@@ -113,7 +113,7 @@ function Landing() {
         </div>
       </section>
       <footer className="landing-footer">
-        © {new Date().getFullYear()} yk Technology
+        © {new Date().getFullYear()} YK Technology
       </footer>
     </main>
   );
