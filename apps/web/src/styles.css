@@ -188,6 +188,15 @@ body {
   align-items: center;
   gap: 4px;
 }
+.landing-footer {
+  padding: 22px max(20px, env(safe-area-inset-left, 0px))
+    calc(22px + env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
 .landing-copy {
   max-width: 610px;
   margin: 80px auto 0;
