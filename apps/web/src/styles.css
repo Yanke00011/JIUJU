@@ -496,48 +496,6 @@ body {
     text-shadow: 0 6px 13px rgba(230, 162, 60, 0.5);
   }
 }
-.scanner-frame {
-  position: relative;
-  overflow: hidden;
-  min-height: 235px;
-  border: 1px solid rgba(230, 162, 60, 0.38);
-  border-radius: 20px;
-  background: #130d0e;
-}
-.scanner-frame::before {
-  content: "";
-  position: absolute;
-  z-index: 3;
-  inset: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.78);
-  border-radius: 16px;
-  pointer-events: none;
-}
-.scanner-frame::after {
-  content: "";
-  position: absolute;
-  z-index: 4;
-  left: 18px;
-  right: 18px;
-  top: 25%;
-  height: 2px;
-  background: #f4b849;
-  box-shadow: 0 0 16px #f4b849;
-  animation: scan 2.2s ease-in-out infinite;
-  pointer-events: none;
-}
-.scanner-frame > div {
-  min-height: 235px;
-}
-.scanner-frame video {
-  border-radius: 20px;
-  object-fit: cover;
-}
-@keyframes scan {
-  50% {
-    transform: translateY(125px);
-  }
-}
 .product-confirm {
   border: 1px solid #f1d8b4;
   background: linear-gradient(145deg, #fffaf1, #fff);
@@ -745,6 +703,17 @@ body {
 .scanner-frame video {
   border-radius: 20px;
   object-fit: cover;
+}
+.scanner-placeholder {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #130d0e;
 }
 .scanner-overlay {
   position: absolute;

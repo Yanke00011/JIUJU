@@ -12,7 +12,7 @@ describe('Admin (e2e)', () => {
   let prisma: PrismaService;
 
   const adminName = `e2e_admin_${Date.now()}`;
-  const superAdminName = `e2e_superadmin_${Date.now()}`;
+  const superAdminName = `e2e_admin_super_${Date.now()}`;
   const userName = `e2e_admin_user_${Date.now()}`;
   const password = 'Password123';
 
@@ -51,6 +51,7 @@ describe('Admin (e2e)', () => {
       where: {
         OR: [
           { name: '后台啤酒' },
+          { name: '后台精酿' },
           { name: '软删啤酒' },
           { name: '待删除啤酒' },
           { name: '引用中啤酒' },
@@ -113,6 +114,7 @@ describe('Admin (e2e)', () => {
       where: {
         OR: [
           { name: '后台啤酒' },
+          { name: '后台精酿' },
           { name: '软删啤酒' },
           { name: '待删除啤酒' },
           { name: '引用中啤酒' },
@@ -294,7 +296,7 @@ describe('Admin (e2e)', () => {
     });
 
     afterAll(async () => {
-      await prisma.product.deleteMany({ where: { name: '后台啤酒' } });
+      await prisma.product.deleteMany({ where: { OR: [{ name: '后台啤酒' }, { name: '后台精酿' }] } });
     });
 
     it('should list products with pagination', async () => {

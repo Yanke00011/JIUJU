@@ -6,6 +6,24 @@
 
 ---
 
+## Phase 16 Bug Fix — 扫码登记流程修复 + 测试数据清理
+
+- **状态**：已完成
+- **Bug 原因**：
+  1. **手动输入条码查询无响应**：`DrinkRecord` 页用 `InputNumber` 输入条码，但其 `onChange` 返回 `number`，组件却按 `string` 存入 `barcode` 状态；点击查询时 `barcode.trim()` 对 number 调用抛异常，被表单静默吞掉 → 无任何反馈（无 loading、无结果、无报错）。
+  2. **扫码框黑屏**：`scanner-frame` 在摄像头初始化前是 `display:none`，html5-qrcode 在容器隐藏/无尺寸时启动 → video 无画面；且未自动请求摄像头、缺少启动/停止/清理的生命周期管理与错误细分。
+  3. **测试数据污染**：admin e2e 的超级管理员用户名 `e2e_superadmin_*` 前缀不匹配清理用的 `e2e_admin*`，导致每次 e2e 运行残留一个用户；且缺少统一的测试数据清理脚本。
+- **修复方案**：
+  1. 手动条码改用 `Input`（字符串）+ `inputMode="numeric"`，校验通过后查询；新增 `queryState`（idle/loading/success/not-found/network-error）明确展示「查询中 Loading / 未找到该商品，请检查条码 / 网络连接失败」。
+  2. 扫码改为进入页面自动请求后置摄像头（`Html5Qrcode.getCameras()` 优先后置，回退 `facingMode: environment`）；`scanner-frame` 始终可见，初始化前显示「正在启动摄像头...」占位；用 `scannerRef` 管理实例，`start/stop/clear` 幂等化，卸载时释放；错误映射为明确原因（权限被拒 / HTTPS 限制 / 浏览器不支持 / 摄像头不可用）。
+  3. 新增 `scripts/cleanup-test-data.ts`（`pnpm cleanup:test-data`）：按用户名前缀（test_/e2e_/live_/webflow_/web_/p15/p151/prod_）清理测试用户及其房间、成员、饮酒记录、操作日志，并按条码 `999999` / 测试商品名清理测试商品；显式保护 `admin`/`testuser` 种子账号与真实数据。同时修复 admin e2e 超级管理员前缀，使 `e2e_admin*` 清理覆盖全部测试用户。
+- **影响范围**：`apps/web/src/pages/DrinkRecord.tsx`、`apps/web/src/styles.css`、`apps/api/test/admin.e2e-spec.ts`、新增 `scripts/cleanup-test-data.ts`、`package.json`（新增 `cleanup:test-data` 脚本）
+- **API / 数据库变化**：无（仅前端修复 + 测试清理脚本）
+- **Git commit**：`fix: repair drink scanning workflow and cleanup test data`
+- **测试结果**：后端 typecheck/lint ✅，145 unit / 120 e2e ✅（e2e 连跑 2 次稳定，且跑完后无测试数据残留），build ✅；前端 typecheck/build ✅；清理脚本实测可删除测试数据且保留 admin/testuser 与真实用户。
+
+---
+
 ## Phase 16 — Admin 数据分析增强 + 扫码体验升级 + UI 设计规范（已完成）
 
 - **状态**：已完成

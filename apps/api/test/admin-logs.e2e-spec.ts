@@ -40,7 +40,7 @@ describe('Admin Logs (e2e)', () => {
     await prisma.room.deleteMany({
       where: { owner: { username: { startsWith: 'e2e_logs_' } } },
     });
-    await prisma.product.deleteMany({ where: { name: '日志啤酒' } });
+    await prisma.product.deleteMany({ where: { OR: [{ name: '日志啤酒' }, { name: '日志精酿' }] } });
     await prisma.user.deleteMany({ where: { username: { startsWith: 'e2e_logs_' } } });
 
     const passwordHash = await hash(password, ARGON2_OPTIONS);
@@ -86,7 +86,7 @@ describe('Admin Logs (e2e)', () => {
     await prisma.room.deleteMany({
       where: { owner: { username: { startsWith: 'e2e_logs_' } } },
     });
-    await prisma.product.deleteMany({ where: { name: '日志啤酒' } });
+    await prisma.product.deleteMany({ where: { OR: [{ name: '日志啤酒' }, { name: '日志精酿' }] } });
     await prisma.user.deleteMany({ where: { username: { startsWith: 'e2e_logs_' } } });
     await app.close();
   });
