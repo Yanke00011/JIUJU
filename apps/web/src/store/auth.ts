@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { User } from '../types/api';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import type { User } from "../types/api";
 
 interface AuthState {
   token: string | null;
@@ -20,7 +20,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => set({ token: null, user: null }),
     }),
     {
-      name: 'jiuju-auth',
+      name: "jiuju-auth",
     },
   ),
 );

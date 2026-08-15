@@ -1,11 +1,12 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import AppLayout from './components/AppLayout';
-import PrivateRoute from './router/PrivateRoute';
-import Login from './pages/Login';
-import Home from './pages/Home';
-import CreateRoom from './pages/CreateRoom';
-import JoinRoom from './pages/JoinRoom';
-import RoomDetail from './pages/RoomDetail';
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import AppLayout from "./components/AppLayout";
+import PrivateRoute from "./router/PrivateRoute";
+import Login from "./pages/Login";
+import Home from "./pages/Home";
+import CreateRoom from "./pages/CreateRoom";
+import JoinRoom from "./pages/JoinRoom";
+import RoomDetail from "./pages/RoomDetail";
+import DrinkRecord from "./pages/DrinkRecord";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/rooms/create" element={<CreateRoom />} />
           <Route path="/rooms/join" element={<JoinRoom />} />
           <Route path="/rooms/:id" element={<RoomDetail />} />
+          <Route path="/rooms/:id/drink" element={<DrinkRecord />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

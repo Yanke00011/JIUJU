@@ -1,10 +1,9 @@
-import axios, { AxiosError, type AxiosRequestConfig } from 'axios';
-import { message } from 'antd';
-import { useAuthStore } from '../store/auth';
-import type { ApiResponse } from '../types/api';
+import axios, { AxiosError, type AxiosRequestConfig } from "axios";
+import { message } from "antd";
+import { useAuthStore } from "../store/auth";
+import type { ApiResponse } from "../types/api";
 
-const baseURL =
-  import.meta.env.VITE_API_BASE_URL || '/api';
+const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 const request = axios.create({
   baseURL,
@@ -30,24 +29,29 @@ request.interceptors.response.use(
     if (status === 401) {
       // 登录过期或凭证无效：清除本地状态并跳转登录页
       useAuthStore.getState().logout();
-      if (window.location.pathname !== '/login') {
-        message.warning('登录已过期，请重新登录');
-        window.location.href = '/login';
+      if (window.location.pathname !== "/login") {
+        message.warning("登录已过期，请重新登录");
+        window.location.href = "/login";
       }
       return Promise.reject(error);
     }
 
     if (status === 403) {
-      message.error(serverMessage || '没有权限执行该操作');
+      message.error(serverMessage || "没有权限执行该操作");
+      return Promise.reject(error);
+    }
+
+    if (status === 404) {
+      message.error(serverMessage || "请求的资源不存在");
       return Promise.reject(error);
     }
 
     if (error.response) {
-      message.error(serverMessage || '请求失败，请稍后重试');
-    } else if (error.code === 'ECONNABORTED') {
-      message.error('请求超时，请稍后重试');
+      message.error(serverMessage || "请求失败，请稍后重试");
+    } else if (error.code === "ECONNABORTED") {
+      message.error("请求超时，请稍后重试");
     } else {
-      message.error('网络异常，请检查网络连接');
+      message.error("网络异常，请检查网络连接");
     }
 
     return Promise.reject(error);
@@ -60,8 +64,14 @@ export function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
 }
 
 /** 统一 POST */
-export function post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-  return request.post<ApiResponse<T>>(url, data, config).then((res) => res.data.data);
+export function post<T>(
+  url: string,
+  data?: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  return request
+    .post<ApiResponse<T>>(url, data, config)
+    .then((res) => res.data.data);
 }
 
 export default request;

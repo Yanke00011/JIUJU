@@ -85,12 +85,14 @@
   - 生产安全：JWT_SECRET 为空拒绝启动；`NODE_ENV=production` 默认关闭 Swagger（仅 `SWAGGER_ENABLED=true` 时开启）；生产 CORS 严格读取 `CORS_ORIGINS`，禁止 `*`
   - 请求日志增强：所有日志包含 `requestId / method / url / statusCode / duration`（`x-request-id` 响应头）
 - 用户 Web（`apps/web`，React 18 + TypeScript + Vite + Ant Design + React Router + Axios + Zustand + TanStack Query）：
-  - 页面：登录/注册（`/login`）、我的酒局（`/`）、创建酒局（`/rooms/create`）、加入酒局（`/rooms/join`）、酒局详情（`/rooms/:id`）
-  - 网络层 `src/services/request.ts`：自动携带 `Authorization: Bearer` token，统一处理 401（清除登录态并跳转）/403/网络错误提示
+  - 页面：登录/注册（`/login`）、我的酒局（`/`）、创建酒局（`/rooms/create`）、加入酒局（`/rooms/join`）、酒局详情（`/rooms/:id`）、登记饮酒（`/rooms/:id/drink`）
+  - 扫码登记：`html5-qrcode` 调用摄像头扫描酒瓶条码 → 查询商品（`GET /products/barcode/:barcode`）→ 确认数量（支持小数）→ 创建记录（`POST /rooms/:id/drinks`）→ 刷新统计
+  - 酒局详情实时排行榜：调用 `GET /rooms/:id/statistics` 展示总记录/总数量/总容量、用户排行（按酒精量）、酒品排行，每 15 秒自动刷新
+  - 网络层 `src/services/request.ts`：自动携带 `Authorization: Bearer` token，统一处理 401（清除登录态并跳转）/403/404/网络错误提示
   - 状态管理：Zustand 保存 token 与用户信息（持久化到 localStorage）
   - 路由：`PrivateRoute` 未登录跳转 `/login`
-  - 移动端友好（Ant Design + 移动优先布局），环境变量 `VITE_API_BASE_URL`（开发环境用 Vite 代理 `/api`）
-  - 未实现：扫码、DrinkRecord、统计图表、Admin 后台、微信登录
+  - 移动端友好（Ant Design + 移动优先布局 + 底部固定登记按钮），环境变量 `VITE_API_BASE_URL`（开发环境用 Vite 代理 `/api`）
+  - 未实现：微信小程序、Admin 后台页面、支付、社交分享、AI 功能
 
 尚未实现（属于后续 Phase）：Admin Web、微信小程序。
 
@@ -175,66 +177,185 @@ jiuju/
 └── README.md
 ```
 
-## 环境要求
+## 开发指南
 
-- Node.js：推荐使用当前维护中的 LTS 版本
-- pnpm：推荐通过 Corepack 安装与管理
-- PostgreSQL：开发与生产均必须使用
-- Docker 与 Docker Compose：用于本地依赖和生产部署
-- Git：按 Phase 提交变更
+本指南面向新开发者，覆盖从克隆仓库到前后端联调、手机局域网扫码测试的完整流程。
 
-首次开始开发前，先检查 Node.js、pnpm、Docker 与 PostgreSQL 连接是否可用。
+### 一、环境要求
 
-## 安装与启动
+- **Node.js**：推荐使用当前维护中的 LTS 版本（本项目 CI/开发验证使用 Node 20）
+- **pnpm**：推荐通过 Corepack 安装与管理（项目使用 pnpm 9，见根目录 `package.json` 的 `packageManager` 字段）
+- **Docker 与 Docker Compose**：用于本地 PostgreSQL 与生产部署
+- **Git**：按 Phase 提交变更
 
-以下命令描述当前 Phase 1 的实际使用方式；具体脚本名称以项目的 `package.json` 为准。
+```bash
+node --version   # >= 20
+pnpm --version   # 9.x（若未安装：npm install -g --prefix <dir> pnpm@9 或 corepack enable）
+docker --version
+docker compose version
+```
+
+首次开始开发前，先确认以上工具可用。
+
+### 二、后端启动
+
+**1. 进入项目并安装依赖**
 
 ```bash
 git clone <repository-url> jiuju
 cd jiuju
 pnpm install
+```
+
+**2. 配置环境变量**
+
+```bash
 cp apps/api/.env.example apps/api/.env
 ```
 
-说明：项目使用 `pnpm`（Monorepo）。Node 20 环境建议使用 pnpm 9（可通过 `npm install -g --prefix <dir> pnpm@9` 本地安装，或 `corepack enable` 后由项目内 `packageManager` 字段指定版本）。
+`.env.example` 说明（详见「环境变量」章节）：
 
-启动 PostgreSQL：
+| 变量 | 说明 |
+| --- | --- |
+| `NODE_ENV` | `development` / `production` |
+| `DATABASE_URL` | PostgreSQL 连接串（与 `docker-compose.yml` 默认一致） |
+| `JWT_SECRET` | JWT 签名密钥，生产必须使用强随机值 |
+| `JWT_EXPIRES_IN` | JWT 有效期，如 `7d` |
+| `CORS_ORIGINS` | 允许的跨域来源，逗号分隔 |
+| `API_PORT` | API 监听端口（默认 3000） |
+| `SWAGGER_ENABLED` | 是否启用 Swagger |
+| `SEED_ADMIN_PASSWORD` | 种子管理员 `admin` 的密码 |
+
+**3. 启动 PostgreSQL**
 
 ```bash
 docker compose up -d postgres
 ```
 
-生成 Prisma Client：
+等待容器健康（`docker ps` 中 `jiuju-postgres` 状态为 `healthy`）。
+
+**4. 数据库迁移与 Seed**
 
 ```bash
-pnpm prisma generate
+pnpm prisma generate        # 生成 Prisma Client
+pnpm prisma migrate deploy  # 应用已有迁移（开发时也可用 pnpm prisma migrate dev）
+pnpm prisma db seed         # 写入种子数据（admin / testuser / 3 个测试酒品）
 ```
 
-启动 API 开发服务：
+> 开发环境新增字段时用 `pnpm prisma migrate dev --name <migration-name>`；生产环境只允许 `migrate deploy`。
+
+**5. 启动 NestJS API**
+
+方式一（根目录，推荐）：
 
 ```bash
 pnpm dev
 ```
 
-> 说明：业务数据模型、Migration 与 Seed 已在后续 Phase 完成（数据库/认证/房间/酒品/饮酒记录/统计/Admin/日志/生产部署）。
+方式二（进入 API 目录）：
 
-启动用户 Web 开发服务（新终端）：
+```bash
+cd apps/api
+pnpm start:dev
+```
+
+API 默认运行在 `http://localhost:3000`。
+
+### 三、后端验证
+
+- **健康检查**：`GET http://localhost:3000/api/v1/health` → `{ "success": true, "data": { "status": "ok", "database": "up" } }`
+- **Swagger 文档**：`http://localhost:3000/api/docs`（生产默认关闭，需 `SWAGGER_ENABLED=true`）
+- **种子账号**：`admin`（SUPER_ADMIN，密码为 `SEED_ADMIN_PASSWORD`）、`testuser`（密码 `testuser-dev-password-2026`）
+
+### 四、前端启动
 
 ```bash
 cd apps/web
-cp .env.example .env   # VITE_API_BASE_URL 默认 /api，走 Vite 代理
-pnpm dev               # http://localhost:5173
+pnpm install            # 首次或在根目录执行 pnpm install 亦可
+cp .env.example .env    # VITE_API_BASE_URL 默认 /api
+pnpm dev                # http://localhost:5173
 ```
 
-Web 开发环境下 Vite 会把 `/api` 代理到 `http://localhost:3000`（见 `apps/web/vite.config.ts`）。生产环境通过 `VITE_API_BASE_URL` 指向真实 API 地址。
+`.env.example` 说明：
 
-生产环境使用：
+```dotenv
+# API 基础地址。开发环境用 /api（走 Vite 代理）；生产指向真实 API，如 https://api.example.com/api
+VITE_API_BASE_URL=/api
+```
+
+### 五、前后端联调说明
+
+- 前端（Vite dev）：`http://localhost:5173`
+- 后端（NestJS）：`http://localhost:3000`
+- 开发环境：Vite 把 `/api` 代理到 `http://localhost:3000`（见 `apps/web/vite.config.ts`，代理时自动拼接 `/api/v1` 前缀），因此前端无需关心 CORS。
+- 若直接跨端口访问（如从 `5173` 直接请求 `3000` 且关闭代理），后端通过 `CORS_ORIGINS` 放行前端来源；开发默认放行 `http://localhost:5173,http://localhost:5174`。生产环境必须显式配置前端域名，禁止 `*`。
+
+### 六、手机局域网测试
+
+手机与电脑需在同一局域网：
 
 ```bash
-docker compose up -d
+cd apps/web
+pnpm dev --host   # 监听 0.0.0.0
 ```
 
-最终 Compose 应包含 `api`、`postgres`、`web` 与 `admin`；Redis 为可选预留服务。
+查看本机 IP：
+
+```bash
+# macOS
+ipconfig getifaddr en0
+# 或 ifconfig | grep "inet "
+```
+
+手机浏览器访问 `http://<电脑IP>:5173`（如 `http://192.168.1.100:5173`）。
+
+注意：
+
+- 手机访问的是电脑 IP，需确保防火墙放行 5173 端口；
+- 摄像头扫码必须在 **HTTPS** 或 **localhost** 下可用（`html5-qrcode` 需要 `getUserMedia`）；局域网 IP 访问时浏览器可能拒绝摄像头。建议后续通过 HTTPS 反向代理或使用手机 Chrome 的「不安全源安全访问」调试；
+- 若无法扫码，可在登记页手动输入条码测试完整流程。
+
+### 七、常见问题
+
+**1. 前端页面 404 / 刷新后空白**
+
+- 开发环境使用 Vite，路由由前端接管；生产部署需把任意路径回退到 `index.html`（SPA fallback）。
+- 确认访问的是 `http://localhost:5173` 而非把 `dist` 直接用静态服务器打开。
+
+**2. API 地址错误 / 请求返回 404**
+
+- 开发环境默认 `/api` 走 Vite 代理到 `:3000`；若代理未生效，检查 `apps/web/vite.config.ts` 与 `VITE_API_BASE_URL`。
+- 后端未启动时，前端请求会报网络错误。先确认 `GET /api/v1/health` 可访问。
+
+**3. CORS 错误**
+
+- 浏览器报 `No 'Access-Control-Allow-Origin'`：检查后端 `CORS_ORIGINS` 是否包含前端来源。
+- 开发环境建议用 Vite 代理（同源，无 CORS 问题）。
+
+**4. 数据库连接失败**
+
+- 报错 `Environment variable not found: DATABASE_URL` 或 `ECONNREFUSED`：确认 `apps/api/.env` 已配置、`docker compose up -d postgres` 已启动且健康。
+- 端口冲突：确认 5432 未被占用。
+
+**5. JWT 失效 / 登录后又被踢出**
+
+- 后端重启后旧 token 仍有效（JWT 无状态），但 `JWT_SECRET` 变更会使全部旧 token 失效 → 重新登录。
+- 前端 401 会自动清除登录态并跳转登录页，重新登录即可。
+
+### 八、生产启动说明
+
+```bash
+cp .env.production.example .env.production   # 填写真实值
+docker build -t jiuju-api:prod .             # 构建镜像
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+生产要点：
+
+- 启动时自动执行 `prisma migrate deploy`（禁止 `migrate dev` / `db push`）；
+- `JWT_SECRET` 为空、`CORS_ORIGINS` 为空或包含 `*` 时拒绝启动；
+- 生产默认关闭 Swagger，仅 `SWAGGER_ENABLED=true` 时开启；
+- 详见「Docker、部署与备份」章节。
 
 ## 环境变量
 

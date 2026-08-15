@@ -1,6 +1,6 @@
-import { Navigate } from 'react-router-dom';
-import type { ReactNode } from 'react';
-import { useAuthStore } from '../store/auth';
+import { Navigate } from "react-router-dom";
+import type { ReactNode } from "react";
+import { useAuthStore } from "../store/auth";
 
 /**
  * 私有路由：未登录跳转 /login。
