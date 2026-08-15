@@ -183,6 +183,11 @@ body {
 .landing-nav .brand-lockup small {
   color: rgba(255, 255, 255, 0.55);
 }
+.landing-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .landing-copy {
   max-width: 610px;
   margin: 80px auto 0;

@@ -15,7 +15,10 @@
   - 保留并精简：快速开始（后端/前端/手机局域网测试）、环境变量、常用脚本、项目结构、技术栈、API 文档、测试、Docker 生产部署、备份、Roadmap
   - 链接到 `docs/DEVELOPMENT_LOG.md`、`docs/UI_DESIGN_SYSTEM.md`、`PROJECT_SPEC.md`、`AGENT_INSTRUCTIONS.md`
 - **API / 数据库变化**：无
-- **Git commit**：`docs: rewrite readme with usage tutorial`
+- **后续修复**：
+  - 快速开始勘误：原文档复制 `.env.example` 后直接 `pnpm prisma db seed`，但示例中 `SEED_ADMIN_PASSWORD` 为占位值 `change-me-before-use`，seed 会直接抛错；已在 README 中补充「将 SEED_ADMIN_PASSWORD 改为真实密码」步骤，并把克隆地址改为真实仓库 `https://github.com/Yanke00011/JIUJU.git`。
+  - 首页新增 GitHub 仓库按钮：落地页导航增加「GitHub」链接按钮（登录页右侧），登录后的 App 头部增加 GitHub 图标按钮，均新开标签打开 `https://github.com/Yanke00011/JIUJU`。
+- **Git commit**：`docs: rewrite readme with usage tutorial`（README 重写）；`fix: fix readme seed step and add github button`（本次勘误与按钮）
 
 ---
 

@@ -5,6 +5,7 @@ import {
   CameraOutlined,
   CrownOutlined,
   GiftOutlined,
+  GithubOutlined,
   SafetyCertificateOutlined,
   TrophyOutlined,
 } from "@ant-design/icons";
@@ -12,6 +13,8 @@ import { useNavigate } from "react-router-dom";
 import AppLayout from "../components/AppLayout";
 import MyRooms from "../components/MyRooms";
 import { useAuthStore } from "../store/auth";
+
+const GITHUB_URL = "https://github.com/Yanke00011/JIUJU";
 
 function Landing() {
   const navigate = useNavigate();
@@ -39,13 +42,25 @@ function Landing() {
               <small>JIUJU SOCIAL CLUB</small>
             </span>
           </div>
-          <Button
-            type="text"
-            style={{ color: "#fff" }}
-            onClick={() => navigate("/login")}
-          >
-            登录
-          </Button>
+          <div className="landing-nav-actions">
+            <Button
+              type="text"
+              icon={<GithubOutlined />}
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#fff" }}
+            >
+              GitHub
+            </Button>
+            <Button
+              type="text"
+              style={{ color: "#fff" }}
+              onClick={() => navigate("/login")}
+            >
+              登录
+            </Button>
+          </div>
         </nav>
         <div className="landing-copy">
           <span className="eyebrow">聚会的公平记录官</span>

@@ -149,12 +149,13 @@ docker --version
 
 ```bash
 # 1. 克隆并安装依赖
-git clone <repository-url> jiuju
+git clone https://github.com/Yanke00011/JIUJU.git jiuju
 cd jiuju
 pnpm install
 
-# 2. 配置环境变量
+# 2. 配置环境变量（必须把 SEED_ADMIN_PASSWORD 从占位值改成真实密码，否则 seed 会失败）
 cp apps/api/.env.example apps/api/.env
+#    编辑 apps/api/.env，将 SEED_ADMIN_PASSWORD 改为你的密码，如：SEED_ADMIN_PASSWORD="my-admin-password"
 
 # 3. 启动 PostgreSQL
 docker compose up -d postgres

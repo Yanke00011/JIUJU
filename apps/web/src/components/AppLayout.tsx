@@ -1,8 +1,10 @@
 import { Layout, Button } from "antd";
-import { LogoutOutlined } from "@ant-design/icons";
+import { GithubOutlined, LogoutOutlined } from "@ant-design/icons";
 import { Outlet, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuthStore } from "../store/auth";
+
+const GITHUB_URL = "https://github.com/Yanke00011/JIUJU";
 
 /**
  * 移动端友好的基础布局：顶部栏 + 内容区。
@@ -29,6 +31,15 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
           <span><strong>酒局管家</strong><small>JIUJU SOCIAL CLUB</small></span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Button
+            size="small"
+            type="text"
+            icon={<GithubOutlined />}
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub 仓库"
+          />
           {isAdmin && (
             <Button
               size="small"
