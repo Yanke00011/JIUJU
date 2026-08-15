@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1、2、3 已完成）
+## 当前进度（Phase 1、2、3、4 已完成）
 
-当前阶段为 **Backend First · Phase 1 + Phase 2 + Phase 3：项目初始化 + 数据库 + 认证**，已完成：
+当前阶段为 **Backend First · Phase 1 + Phase 2 + Phase 3 + Phase 4：项目初始化 + 数据库 + 认证 + 用户资料**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -31,6 +31,9 @@
 - Argon2id 密码哈希（`@node-rs/argon2`，参数与 seed 一致）
 - 登录限流（10 次/分钟）与注册限流（20 次/分钟），全局默认 100 次/分钟
 - Auth 单元测试与 E2E 测试（注册/登录/me、无 token/无效/过期 token、禁用用户等）
+- Users：用户资料（`GET /api/v1/users/me`、`PATCH /api/v1/users/me`）
+- 用户资料可修改 `nickname` / `avatar`；不允许修改 `username`、`role`、`status` 等字段
+- Users 单元测试与 E2E 测试（getMe/updateMe、无 token 401、非法昵称/头像、不可改 role/status、不返回 passwordHash）
 
 尚未实现（属于后续 Phase）：房间、成员、酒品、饮酒记录、统计、Admin API、用户 Web、Admin Web、微信小程序。
 
@@ -312,6 +315,10 @@ pnpm prisma db seed                               # 写入种子数据
   - `GET /api/v1/auth/me`：需要 `Authorization: Bearer <token>`，返回当前用户；无/无效/过期 token 返回 401，被禁用用户返回 401 `USER_DISABLED`。
   - JWT payload 仅含 `sub`（用户 ID）与 `role`，不包含任何敏感字段。
   - 限流：登录 10 次/分钟、注册 20 次/分钟（基于 IP）。
+- `Users`（用户资料）：
+  - `GET /api/v1/users/me`：需要 JWT，返回当前登录用户资料（不含 `passwordHash`）。
+  - `PATCH /api/v1/users/me`：需要 JWT，允许修改 `nickname`（1-50 位）与 `avatar`（合法的 http(s) URL，最长 500 字符）；`username`、`role`、`status`、`passwordHash` 等字段不可修改（传入即被 DTO 校验拒绝，返回 400）。
+  - 身份一律来自 JWT，不使用 body/URL 中的 userId。
 - `Rooms` 与 `Members`：创建、加入、退出、成员、结束与房间权限。
 - `Products`：如 `GET /api/v1/products/barcode/:barcode`；找不到时返回 `PRODUCT_NOT_FOUND`。
 - `Drinks`：`POST /api/v1/rooms/:roomId/drinks`。创建前依次校验 JWT、登记人房间成员身份、房间为 `ACTIVE`、酒品存在、实际饮用者属于房间、幂等键，然后创建或返回原记录。

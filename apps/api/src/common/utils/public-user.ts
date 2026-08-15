@@ -12,6 +12,7 @@ export interface PublicUser {
   role: User['role'];
   status: User['status'];
   createdAt: Date;
+  updatedAt: Date;
   lastLoginAt: Date | null;
 }
 
@@ -24,6 +25,7 @@ export function toPublicUser(user: User): PublicUser {
     role: user.role,
     status: user.status,
     createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
     lastLoginAt: user.lastLoginAt,
   };
 }
