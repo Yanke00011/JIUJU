@@ -6,7 +6,28 @@
 
 ---
 
-## Phase 17.3.2 — README 重写（GitHub 规范 + 使用教程）
+## Phase 17.3.2 — Admin 用户权限管理增强
+
+- **状态**：已完成
+- **新增功能**：后台支持 SUPER_ADMIN 管理管理员权限。
+  - 新增接口 `PATCH /api/v1/admin/users/:id/role`（`{ role: "USER" | "ADMIN" }`，仅 SUPER_ADMIN）。
+  - 用户管理页：角色列已展示（普通用户 / 管理员 / 超级管理员标签）；当前用户为 SUPER_ADMIN 时，对普通用户显示「设置管理员」、对管理员显示「取消管理员权限」按钮（Popconfirm 确认），成功后 Toast 反馈并刷新列表。
+  - 操作日志新增 `USER_ROLE_UPDATE`（details 含 `oldRole / newRole / targetUser`），仪表盘与日志页动作标签/过滤器已补充。
+- **权限规则**：
+  - 仅 SUPER_ADMIN 可提升/降级（ADMIN 调用 → 403 `SUPER_ADMIN_REQUIRED`；USER → 403 `FORBIDDEN`）；
+  - 仅允许 `USER ↔ ADMIN`，禁止设置为 SUPER_ADMIN（DTO 400 `VALIDATION_ERROR`）；
+  - 不能修改自己（403 `CANNOT_MODIFY_SELF_ROLE`）；
+  - 不能修改 SUPER_ADMIN（403 `CANNOT_MODIFY_SUPER_ADMIN`）；
+  - 角色相同视为幂等，直接返回不写日志。
+- **API 变化**：新增 `PATCH /api/v1/admin/users/:id/role`（其余不变）。
+- **数据库变化**：无（OperationLog 复用既有字段，无需 migration）。
+- **影响范围**：`apps/api/src/admin/admin-users.controller.ts`、`admin-users.service.ts`、新增 `dto/update-user-role.dto.ts`、`admin-users.service.spec.ts`、`test/admin.e2e-spec.ts`；`apps/web/src/pages/admin/AdminUsers.tsx`、`AdminDashboard.tsx`、`AdminLogs.tsx`、`apps/web/src/services/admin.ts`
+- **测试结果**：后端 typecheck/lint ✅、unit 151 ✅（+6）、e2e 127 ✅（+7，覆盖提升/降级/ADMIN 403/USER 403/自改 403/改超管 403/SET SUPER_ADMIN 400/OperationLog）；前端 typecheck/build ✅；浏览器实测（SUPER_ADMIN 提升 USER 成功、角色标签与按钮正确、普通 ADMIN 不显示角色按钮、Popconfirm 与成功提示正常、OperationLog 落库正确）。
+- **Git commit**：`feat: add admin user role management`
+
+---
+
+## Phase 17.3.3 — README 重写（GitHub 规范 + 使用教程）
 
 - **状态**：已完成
 - **改动内容**：重写根目录 `README.md`，从面向开发者的长文档改为符合 GitHub 规范的**产品 README**：

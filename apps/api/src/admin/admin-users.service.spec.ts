@@ -119,6 +119,89 @@ describe('AdminUsersService', () => {
     });
   });
 
+  describe('updateRole', () => {
+    it('should promote a USER to ADMIN and write an operation log', async () => {
+      prisma.user.findUnique.mockResolvedValue(makeUser());
+      prisma.user.update.mockResolvedValue(makeUser({ role: 'ADMIN' }));
+
+      const result = await service.updateRole(ADMIN_ID, USER_ID, 'ADMIN', request);
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: USER_ID },
+        data: { role: 'ADMIN' },
+      });
+      expect(logService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adminUserId: ADMIN_ID,
+          action: 'USER_ROLE_UPDATE',
+          targetType: 'User',
+          targetId: USER_ID,
+          metadata: { oldRole: 'USER', newRole: 'ADMIN', targetUser: 'zhangsan' },
+        }),
+      );
+      expect(result.role).toBe('ADMIN');
+    });
+
+    it('should demote an ADMIN to USER and write an operation log', async () => {
+      prisma.user.findUnique.mockResolvedValue(makeUser({ role: 'ADMIN' }));
+      prisma.user.update.mockResolvedValue(makeUser({ role: 'USER' }));
+
+      const result = await service.updateRole(ADMIN_ID, USER_ID, 'USER', request);
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: USER_ID },
+        data: { role: 'USER' },
+      });
+      expect(logService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'USER_ROLE_UPDATE',
+          metadata: { oldRole: 'ADMIN', newRole: 'USER', targetUser: 'zhangsan' },
+        }),
+      );
+      expect(result.role).toBe('USER');
+    });
+
+    it('should be idempotent when role is unchanged (no update / no log)', async () => {
+      prisma.user.findUnique.mockResolvedValue(makeUser({ role: 'ADMIN' }));
+
+      const result = await service.updateRole(ADMIN_ID, USER_ID, 'ADMIN', request);
+
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(logService.log).not.toHaveBeenCalled();
+      expect(result.role).toBe('ADMIN');
+    });
+
+    it('should reject modifying self with 403', async () => {
+      prisma.user.findUnique.mockResolvedValue(makeUser({ id: ADMIN_ID, role: 'SUPER_ADMIN' }));
+
+      await expect(service.updateRole(ADMIN_ID, ADMIN_ID, 'ADMIN', request)).rejects.toMatchObject({
+        status: HttpStatus.FORBIDDEN,
+        response: { code: 'CANNOT_MODIFY_SELF_ROLE' },
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(logService.log).not.toHaveBeenCalled();
+    });
+
+    it('should reject modifying a SUPER_ADMIN with 403', async () => {
+      prisma.user.findUnique.mockResolvedValue(makeUser({ role: 'SUPER_ADMIN' }));
+
+      await expect(service.updateRole(ADMIN_ID, USER_ID, 'ADMIN', request)).rejects.toMatchObject({
+        status: HttpStatus.FORBIDDEN,
+        response: { code: 'CANNOT_MODIFY_SUPER_ADMIN' },
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when user does not exist', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.updateRole(ADMIN_ID, USER_ID, 'ADMIN', request)).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
+        response: { code: 'USER_NOT_FOUND' },
+      });
+    });
+  });
+
   describe('delete', () => {
     it('should physically delete a user without history', async () => {
       prisma.user.findUnique.mockResolvedValue(makeUser());

@@ -21,6 +21,7 @@ import type { AdminLogItem } from "../../services/admin";
 
 const ACTION_LABEL: Record<string, string> = {
   USER_STATUS_UPDATE: "修改用户状态",
+  USER_ROLE_UPDATE: "修改用户角色",
   PRODUCT_CREATE: "新增商品",
   PRODUCT_UPDATE: "修改商品",
   PRODUCT_DELETE: "删除商品",
@@ -107,6 +108,7 @@ export default function AdminLogs() {
           }}
           options={[
             { value: "USER_STATUS_UPDATE", label: "修改用户状态" },
+            { value: "USER_ROLE_UPDATE", label: "修改用户角色" },
             { value: "PRODUCT_UPDATE", label: "修改商品" },
           ]}
         />

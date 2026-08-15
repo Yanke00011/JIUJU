@@ -16,6 +16,7 @@ import PageHeader from "../../components/common/PageHeader";
 
 const ACTION_LABEL: Record<string, string> = {
   USER_STATUS_UPDATE: "修改用户状态",
+  USER_ROLE_UPDATE: "修改用户角色",
   PRODUCT_CREATE: "新增商品",
   PRODUCT_UPDATE: "修改商品",
   PRODUCT_DELETE: "删除商品",

@@ -19,6 +19,7 @@ import { AdminGuard } from './admin.guard';
 import { SuperAdminGuard } from './super-admin.guard';
 import { AdminUsersService } from './admin-users.service';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
 const USER_EXAMPLE = {
   id: 'b6c8f2b0-4c3e-4a5b-9f8e-1a2b3c4d5e6f',
@@ -121,6 +122,45 @@ export class AdminUsersController {
     @Req() request: Request,
   ) {
     const user = await this.adminUsersService.updateStatus(admin.id, id, dto, request);
+    return { user };
+  }
+
+  @Patch(':id/role')
+  @UseGuards(SuperAdminGuard)
+  @ApiOperation({
+    summary: '修改用户角色（仅超级管理员）',
+    description:
+      '仅允许 USER ↔ ADMIN；禁止设置为 SUPER_ADMIN，禁止修改 SUPER_ADMIN，禁止修改自己的权限。修改会写入操作日志 USER_ROLE_UPDATE。',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: '修改成功',
+    schema: { example: { success: true, data: { user: { ...USER_EXAMPLE, role: 'ADMIN' } } } },
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: '用户不存在',
+    schema: {
+      example: { success: false, error: { code: 'USER_NOT_FOUND', message: '用户不存在' } },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: '仅超级管理员 / 不能修改自己 / 不能修改超级管理员',
+    schema: {
+      example: {
+        success: false,
+        error: { code: 'CANNOT_MODIFY_SUPER_ADMIN', message: '不能修改超级管理员权限' },
+      },
+    },
+  })
+  async updateRole(
+    @CurrentUser() admin: PublicUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateUserRoleDto,
+    @Req() request: Request,
+  ) {
+    const user = await this.adminUsersService.updateRole(admin.id, id, dto.role, request);
     return { user };
   }
 

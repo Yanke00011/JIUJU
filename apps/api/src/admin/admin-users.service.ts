@@ -115,6 +115,59 @@ export class AdminUsersService {
   }
 
   /**
+   * 修改用户角色（仅 SUPER_ADMIN 可调用，由 SuperAdminGuard 保证）：
+   * - 目标仅允许 USER ↔ ADMIN（DTO 已限制）；
+   * - 不能修改自己；
+   * - 不能修改 SUPER_ADMIN；
+   * - 角色相同视为幂等，直接返回不写日志。
+   */
+  async updateRole(
+    adminUserId: string,
+    id: string,
+    role: 'USER' | 'ADMIN',
+    request: Request,
+  ): Promise<AdminUserItem> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new BusinessException('USER_NOT_FOUND', '用户不存在', HttpStatus.NOT_FOUND);
+    }
+    if (id === adminUserId) {
+      throw new BusinessException(
+        'CANNOT_MODIFY_SELF_ROLE',
+        '不能修改自己的权限',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    if (user.role === 'SUPER_ADMIN') {
+      throw new BusinessException(
+        'CANNOT_MODIFY_SUPER_ADMIN',
+        '不能修改超级管理员权限',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    if (user.role === role) {
+      return toAdminUserItem(user);
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: { role },
+    });
+
+    await this.operationLog.log({
+      adminUserId,
+      action: 'USER_ROLE_UPDATE',
+      targetType: 'User',
+      targetId: id,
+      metadata: { oldRole: user.role, newRole: role, targetUser: user.username },
+      ip: request.ip,
+      userAgent: request.headers['user-agent'] ?? null,
+    });
+
+    return toAdminUserItem(updated);
+  }
+
+  /**
    * 删除用户（仅 SUPER_ADMIN）：
    * - 不能删除自己；
    * - 不能删除 SUPER_ADMIN；

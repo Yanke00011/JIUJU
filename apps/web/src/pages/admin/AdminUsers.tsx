@@ -45,6 +45,17 @@ export default function AdminUsers() {
     },
   });
 
+  const roleMutation = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: "USER" | "ADMIN" }) =>
+      adminApi.users.updateRole(id, role),
+    onSuccess: (_data, variables) => {
+      message.success(
+        variables.role === "ADMIN" ? "已设置为管理员" : "已取消管理员权限",
+      );
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => adminApi.users.remove(id),
     onSuccess: (result) => {
@@ -121,6 +132,32 @@ export default function AdminUsers() {
         }
         return (
           <Space>
+            {/* 仅超级管理员可提升/取消管理员（不能操作其他超级管理员） */}
+            {isSuperAdmin &&
+              record.role !== "SUPER_ADMIN" &&
+              !record.deletedAt && (
+                <Popconfirm
+                  title={
+                    record.role === "ADMIN"
+                      ? "确定取消该用户管理员权限？"
+                      : "确定将该用户设置为管理员？"
+                  }
+                  onConfirm={() =>
+                    roleMutation.mutate({
+                      id: record.id,
+                      role: record.role === "ADMIN" ? "USER" : "ADMIN",
+                    })
+                  }
+                >
+                  <Button
+                    size="small"
+                    loading={roleMutation.isPending}
+                    disabled={roleMutation.isPending}
+                  >
+                    {record.role === "ADMIN" ? "取消管理员" : "设置管理员"}
+                  </Button>
+                </Popconfirm>
+              )}
             {record.status === "ACTIVE" && !record.deletedAt ? (
               <Popconfirm
                 title="确定禁用该用户？"

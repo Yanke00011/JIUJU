@@ -218,6 +218,116 @@ describe('Admin (e2e)', () => {
     });
   });
 
+  describe('Admin user role update', () => {
+    let roleUser: { id: string; username: string };
+    let roleAdmin: { id: string; username: string };
+    let roleSuper: { id: string; username: string };
+
+    beforeAll(async () => {
+      const passwordHash = await hash(password, ARGON2_OPTIONS);
+      roleUser = await prisma.user.create({
+        data: {
+          username: `e2e_admin_roleuser_${Date.now()}`,
+          nickname: '角色目标普通用户',
+          passwordHash,
+          role: 'USER',
+        },
+      });
+      roleAdmin = await prisma.user.create({
+        data: {
+          username: `e2e_admin_roleadmin_${Date.now()}`,
+          nickname: '角色目标管理员',
+          passwordHash,
+          role: 'ADMIN',
+        },
+      });
+      roleSuper = await prisma.user.create({
+        data: {
+          username: `e2e_admin_rolesuper_${Date.now()}`,
+          nickname: '角色目标超管',
+          passwordHash,
+          role: 'SUPER_ADMIN',
+        },
+      });
+    });
+
+    it('should let SUPER_ADMIN promote a USER to ADMIN and write an operation log', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/admin/users/${roleUser.id}/role`)
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .send({ role: 'ADMIN' })
+        .expect(200);
+
+      expect(res.body.data.user.role).toBe('ADMIN');
+
+      const log = await prisma.operationLog.findFirst({
+        where: { action: 'USER_ROLE_UPDATE', targetId: roleUser.id },
+      });
+      expect(log).not.toBeNull();
+      expect(JSON.parse(log!.details!)).toEqual({
+        oldRole: 'USER',
+        newRole: 'ADMIN',
+        targetUser: roleUser.username,
+      });
+    });
+
+    it('should let SUPER_ADMIN demote an ADMIN back to USER', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/admin/users/${roleUser.id}/role`)
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .send({ role: 'USER' })
+        .expect(200);
+
+      expect(res.body.data.user.role).toBe('USER');
+    });
+
+    it('should reject ADMIN changing roles with 403', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/admin/users/${roleAdmin.id}/role`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ role: 'USER' })
+        .expect(403);
+      expect(res.body.error.code).toBe('SUPER_ADMIN_REQUIRED');
+    });
+
+    it('should reject a USER token with 403', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/admin/users/${roleUser.id}/role`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ role: 'ADMIN' })
+        .expect(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    });
+
+    it('should reject SUPER_ADMIN modifying self with 403', async () => {
+      const superUser = await prisma.user.findUniqueOrThrow({ where: { username: superAdminName } });
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/admin/users/${superUser.id}/role`)
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .send({ role: 'ADMIN' })
+        .expect(403);
+      expect(res.body.error.code).toBe('CANNOT_MODIFY_SELF_ROLE');
+    });
+
+    it('should reject modifying a SUPER_ADMIN with 403', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/admin/users/${roleSuper.id}/role`)
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .send({ role: 'ADMIN' })
+        .expect(403);
+      expect(res.body.error.code).toBe('CANNOT_MODIFY_SUPER_ADMIN');
+    });
+
+    it('should reject setting SUPER_ADMIN with 400', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/admin/users/${roleUser.id}/role`)
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .send({ role: 'SUPER_ADMIN' })
+        .expect(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
   describe('Admin rooms', () => {
     it('should list rooms with owner and memberCount', async () => {
       // 创建一个房间供 admin 列表使用

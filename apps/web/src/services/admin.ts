@@ -169,6 +169,10 @@ export const adminApi = {
       patch<{ user: AdminUser }>(`/admin/users/${id}/status`, { status }).then(
         (r) => r.user,
       ),
+    updateRole: (id: string, role: "USER" | "ADMIN") =>
+      patch<{ user: AdminUser }>(`/admin/users/${id}/role`, { role }).then(
+        (r) => r.user,
+      ),
     remove: (id: string) =>
       del<{ deleted: boolean; softDeleted: boolean }>(`/admin/users/${id}`),
   },
