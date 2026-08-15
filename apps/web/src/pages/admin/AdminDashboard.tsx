@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, Col, List, Row, Statistic, Tag, Typography } from "antd";
+import { Card, Col, List, Row, Skeleton, Tag, Typography } from "antd";
 import {
   UserOutlined,
   HomeOutlined,
@@ -7,8 +7,12 @@ import {
   NumberOutlined,
   CheckCircleOutlined,
   PlayCircleOutlined,
+  FileTextOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import { adminApi } from "../../services/admin";
+import StatCard from "../../components/common/StatCard";
+import PageHeader from "../../components/common/PageHeader";
 
 const ACTION_LABEL: Record<string, string> = {
   USER_STATUS_UPDATE: "修改用户状态",
@@ -83,69 +87,57 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <Typography.Title level={2} className="admin-page-title">
-        运营仪表盘
-      </Typography.Title>
-      <Typography.Paragraph className="page-subtitle">
-        酒局活跃情况一览（数据实时来自数据库）
-      </Typography.Paragraph>
+      <PageHeader
+        title="运营仪表盘"
+        subtitle="酒局活跃情况一览（数据实时来自数据库）"
+      />
 
-      <Row gutter={[12, 12]}>
-        <Col span={12} xs={12} sm={8}>
-          <Card loading={isLoading}>
-            <Statistic
-              title="用户总数"
-              value={stats?.totalUsers ?? 0}
-              prefix={<UserOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={12} xs={12} sm={8}>
-          <Card loading={isLoading}>
-            <Statistic
-              title="活跃用户"
-              value={stats?.activeUsers ?? 0}
-              prefix={<CheckCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={12} xs={12} sm={8}>
-          <Card loading={isLoading}>
-            <Statistic
-              title="酒局数量"
-              value={stats?.totalRooms ?? 0}
-              prefix={<HomeOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={12} xs={12} sm={8}>
-          <Card loading={isLoading}>
-            <Statistic
-              title="进行中酒局"
-              value={stats?.activeRooms ?? 0}
-              prefix={<PlayCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={12} xs={12} sm={8}>
-          <Card loading={isLoading}>
-            <Statistic
-              title="饮酒记录数量"
-              value={stats?.totalDrinkRecords ?? 0}
-              prefix={<NumberOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={12} xs={12} sm={8}>
-          <Card loading={isLoading}>
-            <Statistic
-              title="商品数量"
-              value={stats?.totalProducts ?? 0}
-              prefix={<ShoppingOutlined />}
-            />
-          </Card>
-        </Col>
-      </Row>
+      {isLoading ? (
+        <div className="admin-stat-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i}>
+              <Skeleton active paragraph={{ rows: 1 }} title={false} />
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="admin-stat-grid">
+          <StatCard
+            icon={<UserOutlined />}
+            label="用户总数"
+            value={stats?.totalUsers ?? 0}
+          />
+          <StatCard
+            icon={<CheckCircleOutlined />}
+            label="活跃用户"
+            value={stats?.activeUsers ?? 0}
+            accent="green"
+          />
+          <StatCard
+            icon={<HomeOutlined />}
+            label="酒局数量"
+            value={stats?.totalRooms ?? 0}
+            accent="gold"
+          />
+          <StatCard
+            icon={<PlayCircleOutlined />}
+            label="进行中酒局"
+            value={stats?.activeRooms ?? 0}
+            accent="green"
+          />
+          <StatCard
+            icon={<NumberOutlined />}
+            label="饮酒记录"
+            value={stats?.totalDrinkRecords ?? 0}
+          />
+          <StatCard
+            icon={<ShoppingOutlined />}
+            label="商品数量"
+            value={stats?.totalProducts ?? 0}
+            accent="gold"
+          />
+        </div>
+      )}
 
       <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
         <Col span={24} lg={12}>
@@ -340,28 +332,45 @@ export default function AdminDashboard() {
         <Col span={24} md={12}>
           <Card
             size="small"
-            title="最近操作日志"
+            title={
+              <span>
+                <FileTextOutlined style={{ marginRight: 6, color: "#8B1E3F" }} />
+                最近操作日志
+              </span>
+            }
             loading={isLoading}
-            styles={{ body: { padding: 0 } }}
+            styles={{ body: { padding: "8px 16px" } }}
           >
             <List
               size="small"
               dataSource={dashboardQuery.data?.recentLogs ?? []}
               locale={{ emptyText: "暂无日志" }}
               renderItem={(log) => (
-                <List.Item>
+                <List.Item style={{ padding: "10px 0" }}>
                   <List.Item.Meta
+                    avatar={
+                      <span className="log-avatar">
+                        <ClockCircleOutlined />
+                      </span>
+                    }
                     title={
-                      <span>
-                        {log.admin?.username || "-"}
-                        <Tag color="blue" style={{ marginLeft: 8 }}>
+                      <span style={{ fontSize: 13 }}>
+                        <Typography.Text strong>
+                          {log.admin?.username || "-"}
+                        </Typography.Text>
+                        <Tag
+                          color="blue"
+                          style={{ marginLeft: 8, fontSize: 11 }}
+                        >
                           {ACTION_LABEL[log.action] || log.action}
                         </Tag>
                       </span>
                     }
-                    description={new Date(log.createdAt).toLocaleString(
-                      "zh-CN",
-                    )}
+                    description={
+                      <span className="log-timeline-time">
+                        {new Date(log.createdAt).toLocaleString("zh-CN")}
+                      </span>
+                    }
                   />
                 </List.Item>
               )}

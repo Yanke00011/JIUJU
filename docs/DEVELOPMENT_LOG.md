@@ -6,6 +6,33 @@
 
 ---
 
+## Phase 17.3 — JIUJU V1.0 UI 全面优化（Design System 统一）
+
+- **状态**：已完成
+- **优化内容**（仅视觉/交互/响应式，未动任何核心逻辑）：
+  1. **公共组件**（新增 `apps/web/src/components/common/`）：`PageHeader`（标题+副标题+操作）、`EmptyState`（友好空状态）、`StatCard`（数据统计卡，accent 强调色），统一各页面的标题区/空状态/统计块。
+  2. **首页 Home**：落地页 Hero 增加价值徽章（朋友聚会 / 扫码即记 / 实时排行 / 防止逃酒），文案强化「防止逃酒」定位；「我的酒局」改用 PageHeader + EmptyState（加载/失败/空三态齐备），房间卡片加品类图标。
+  3. **酒局详情 RoomDetail**：邀请码增加「复制」按钮（clipboard + 成功提示）；成员列表改为头像胶囊（成员徽章，房主金色头像）；排行榜中「我的排名」行高亮（`.me` 酒红浅底）；底部登记栏改为模糊毛玻璃样式。
+  4. **登记饮酒 DrinkRecord**：确认酒品卡片增加「图片占位区」（品类 emoji + 分类标签）；数量输入大号化；提交按钮改为移动端底部固定操作栏（毛玻璃，`[重新选择][确认登记]`），桌面端居中限宽。扫码生命周期 / 登记流程未改动。
+  5. **Admin Dashboard**：6 个统计卡改用 `StatCard`（图标 + 强调色 + hover 上浮），使用网格布局（桌面 3 列 / 平板 2 列 / 手机 1 列）；「最近操作日志」增加图标头像与中文动作标签。
+  6. **AdminLogs**：新增「表格 / 时间线」视图切换（antd Timeline，DELETE 动作红色节点），时间线视图自带分页。
+  7. **全局**：页面进入动画（`page-in`，尊重 `prefers-reduced-motion`）；卡片 hover 提升；统一圆角/阴影/间距继续走既有 CSS 变量与 Theme Token。
+- **影响范围**：`apps/web/src/components/common/`（3 个新增）、`apps/web/src/pages/Home.tsx`、`apps/web/src/pages/RoomDetail.tsx`、`apps/web/src/pages/DrinkRecord.tsx`、`apps/web/src/pages/admin/AdminDashboard.tsx`、`apps/web/src/pages/admin/AdminLogs.tsx`、`apps/web/src/styles.css`
+- **API 变化**：无（`git diff apps/api/` 为空）
+- **数据库变化**：无
+- **测试结果**：
+  - 前端 `pnpm --filter @jiuju/web typecheck` ✅、`build` ✅
+  - 浏览器实测（StrictMode 开发环境，手机 390px + 桌面 1440px）：
+    - 落地页徽章/文案正确；我的酒局空状态与卡片正常；
+    - 房间详情：邀请码复制、成员胶囊、我的排行高亮、底部登记栏均正常；
+    - 登记页：图片占位 + 底部固定提交栏，扫码/手动查询/选择登记全流程回归通过（DrinkRecord 正确落库）；
+    - 后台：仪表盘统计卡网格、日志时间线视图切换正常；无 uncaught error。
+  - 已知非阻塞警告：antd 静态 `message` API 的 theme context 提示（既有，非本次引入）。
+  - 测试数据使用 `e2e_` 前缀已清理；`pnpm cleanup:test-data` 复跑无残留。
+- **Git commit**：`feat: improve jiuju ui design system`
+
+---
+
 ## Phase 17 — JIUJU V1.0 Release Candidate 优化（扫码登记体验 + 后台扫码录入 + UI 统一）
 
 - **状态**：已完成

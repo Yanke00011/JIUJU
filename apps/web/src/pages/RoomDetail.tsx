@@ -10,12 +10,14 @@ import {
   Space,
   Tag,
   Typography,
+  message,
 } from "antd";
 import {
   ArrowLeftOutlined,
   TrophyOutlined,
   UserOutlined,
   EditOutlined,
+  CopyOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import { roomsApi } from "../services/rooms";
@@ -84,6 +86,15 @@ export default function RoomDetail() {
     ...(stats?.products.map((p) => p.quantity) ?? [0]),
   );
 
+  const copyInviteCode = async () => {
+    try {
+      await navigator.clipboard.writeText(room.inviteCode);
+      message.success("邀请码已复制");
+    } catch {
+      message.error("复制失败，请手动记录");
+    }
+  };
+
   return (
     <div style={{ paddingBottom: 88 }}>
       <Button
@@ -114,7 +125,16 @@ export default function RoomDetail() {
           size={4}
           style={{ marginTop: 12, width: "100%" }}
         >
-          <div className="room-invite">邀请码 <b>{room.inviteCode}</b></div>
+          <div className="room-invite">
+            邀请码 <b>{room.inviteCode}</b>
+            <button
+              type="button"
+              className="room-invite-copy"
+              onClick={copyInviteCode}
+            >
+              <CopyOutlined /> 复制
+            </button>
+          </div>
           <div style={{ fontSize: 13, color: "#999" }}>
             创建时间：{new Date(room.createdAt).toLocaleString("zh-CN")}
           </div>
@@ -178,7 +198,7 @@ export default function RoomDetail() {
                 style={{ padding: "12px 0" }}
               />
             ) : (
-              <div>{stats.users.map((user, index) => <div className="rank-row" key={user.userId}><span className={`rank-no ${index === 0 ? "champion" : ""}`}>{index === 0 ? <TrophyOutlined /> : index + 1}</span><Avatar icon={<UserOutlined />} src={user.avatar || undefined} style={index === 0 ? { backgroundColor: "#e6a23c" } : undefined} /><span className="rank-label"><strong>{user.nickname}{user.userId === userId && <Tag color="processing" style={{ marginLeft: 6 }}>我</Tag>}</strong><Progress percent={maxUserAlcohol ? Math.round((user.alcoholMl / maxUserAlcohol) * 100) : 0} showInfo={false} size="small" /></span><span className="rank-value">{user.quantity} 瓶<br />{user.alcoholMl} ml</span></div>)}</div>
+              <div>{stats.users.map((user, index) => <div className={`rank-row ${user.userId === userId ? "me" : ""}`} key={user.userId}><span className={`rank-no ${index === 0 ? "champion" : ""}`}>{index === 0 ? <TrophyOutlined /> : index + 1}</span><Avatar icon={<UserOutlined />} src={user.avatar || undefined} style={index === 0 ? { backgroundColor: "#e6a23c" } : undefined} /><span className="rank-label"><strong>{user.nickname}{user.userId === userId && <Tag color="processing" style={{ marginLeft: 6 }}>我</Tag>}</strong><Progress percent={maxUserAlcohol ? Math.round((user.alcoholMl / maxUserAlcohol) * 100) : 0} showInfo={false} size="small" /></span><span className="rank-value">{user.quantity} 瓶<br />{user.alcoholMl} ml</span></div>)}</div>
             )}
 
             <Typography.Text strong style={{ fontSize: 13 }}>
@@ -235,49 +255,33 @@ export default function RoomDetail() {
           </span>
         }
       >
-        <List
-          loading={membersQuery.isLoading}
-          dataSource={members}
-          renderItem={(member) => (
-            <List.Item>
-              <List.Item.Meta
-                avatar={
-                  <Avatar
-                    icon={<UserOutlined />}
-                    src={member.avatar || undefined}
-                  />
-                }
-                title={
-                  <span>
-                    {member.nickname}
-                    {member.role === "OWNER" && (
-                      <Tag color="gold" style={{ marginLeft: 8 }}>
-                        房主
-                      </Tag>
-                    )}
-                  </span>
-                }
-                description={new Date(member.joinedAt).toLocaleString("zh-CN")}
+        <div className="room-detail-members" style={{ padding: "8px 0 4px" }}>
+          {members.map((member) => (
+            <span className="member-chip" key={member.userId}>
+              <Avatar
+                size={24}
+                icon={<UserOutlined />}
+                src={member.avatar || undefined}
+                style={{
+                  backgroundColor:
+                    member.role === "OWNER" ? "#e6a23c" : "#8B1E3F",
+                }}
               />
-            </List.Item>
-          )}
-        />
+              <span style={{ fontSize: 13 }}>
+                {member.nickname}
+                {member.role === "OWNER" && (
+                  <Tag color="gold" style={{ marginLeft: 6 }}>
+                    房主
+                  </Tag>
+                )}
+              </span>
+            </span>
+          ))}
+        </div>
       </Card>
 
       {/* 底部固定登记按钮 */}
-      <div
-        className="record-action-bar"
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: "12px 12px calc(12px + env(safe-area-inset-bottom, 0px))",
-          background: "#fff",
-          borderTop: "1px solid #f0f0f0",
-          boxShadow: "0 -2px 8px rgba(0,0,0,0.06)",
-        }}
-      >
+      <div className="record-action-bar">
         <div style={{ maxWidth: 560, margin: "0 auto" }}>
           <Button
             type="primary"

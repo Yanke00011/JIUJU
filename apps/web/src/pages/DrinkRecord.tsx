@@ -207,6 +207,16 @@ export default function DrinkRecord() {
     OTHER: "其他",
   };
 
+  const CATEGORY_EMOJI: Record<string, string> = {
+    BEER: "🍺",
+    BAIJIU: "🥃",
+    RED_WINE: "🍷",
+    WHITE_WINE: "🍷",
+    SPIRITS: "🥃",
+    COCKTAIL: "🍸",
+    OTHER: "🍾",
+  };
+
   return (
     <div className="drink-record-page">
       <Button
@@ -351,52 +361,61 @@ export default function DrinkRecord() {
 
       {/* 已确认商品：登记数量并提交（扫码 / 选择共用） */}
       {product && (
-        <Card
-          className="product-confirm product-confirm-anim"
-          title="确认酒品"
-          style={{ marginBottom: 12 }}
-        >
-          <Descriptions column={1} size="small" labelStyle={{ width: 80 }}>
-            <Descriptions.Item label="名称">{product.name}</Descriptions.Item>
-            <Descriptions.Item label="品牌">
-              {product.brand || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="容量">
-              {product.volumeMl} ml
-            </Descriptions.Item>
-            <Descriptions.Item label="酒精度">
-              {product.alcoholPercent !== null
-                ? `${product.alcoholPercent}%`
-                : "-"}
-            </Descriptions.Item>
-          </Descriptions>
+        <>
+          <Card
+            className="product-confirm product-confirm-anim"
+            title="确认酒品"
+            style={{ marginBottom: 12 }}
+          >
+            <div className="product-confirm-body">
+              <div className="product-image-placeholder">
+                <span style={{ fontSize: 30 }}>
+                  {CATEGORY_EMOJI[product.category] || "🍾"}
+                </span>
+                <span>{CATEGORY_LABEL[product.category] || product.category}</span>
+              </div>
+              <Descriptions column={1} size="small" labelStyle={{ width: 80 }}>
+                <Descriptions.Item label="名称">
+                  {product.name}
+                </Descriptions.Item>
+                <Descriptions.Item label="品牌">
+                  {product.brand || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="容量">
+                  {product.volumeMl} ml
+                </Descriptions.Item>
+                <Descriptions.Item label="酒精度">
+                  {product.alcoholPercent !== null
+                    ? `${product.alcoholPercent}%`
+                    : "-"}
+                </Descriptions.Item>
+              </Descriptions>
+            </div>
 
-          <Form layout="vertical" style={{ marginTop: 8 }}>
-            <Form.Item
-              label="数量（支持小数，如 0.5）"
-              style={{ marginBottom: 12 }}
-            >
-              <InputNumber
-                min={0.01}
-                max={100}
-                step={0.5}
-                precision={2}
-                value={quantity}
-                onChange={(v) => setQuantity(v ?? 1)}
-                style={{ width: "100%" }}
-              />
-            </Form.Item>
-            <Space style={{ width: "100%" }}>
-              <Button
-                type="primary"
-                block
-                disabled={!canSubmit}
-                loading={createMutation.isPending}
-                onClick={() => createMutation.mutate()}
+            <Form layout="vertical" style={{ marginTop: 12 }}>
+              <Form.Item
+                label="数量（支持小数，如 0.5）"
+                style={{ marginBottom: 0 }}
               >
-                确认登记
-              </Button>
+                <InputNumber
+                  size="large"
+                  min={0.01}
+                  max={100}
+                  step={0.5}
+                  precision={2}
+                  value={quantity}
+                  onChange={(v) => setQuantity(v ?? 1)}
+                  style={{ width: "100%" }}
+                />
+              </Form.Item>
+            </Form>
+          </Card>
+
+          {/* 底部固定操作栏（移动端优先） */}
+          <div className="drink-action-bar">
+            <div className="drink-action-bar-inner">
               <Button
+                size="large"
                 onClick={() => {
                   setProduct(null);
                   setQueryState("idle");
@@ -404,9 +423,19 @@ export default function DrinkRecord() {
               >
                 重新选择
               </Button>
-            </Space>
-          </Form>
-        </Card>
+              <Button
+                type="primary"
+                size="large"
+                disabled={!canSubmit}
+                loading={createMutation.isPending}
+                onClick={() => createMutation.mutate()}
+              >
+                确认登记
+              </Button>
+            </div>
+          </div>
+          <div className="drink-action-bar-spacer" />
+        </>
       )}
 
       {createMutation.isSuccess && (

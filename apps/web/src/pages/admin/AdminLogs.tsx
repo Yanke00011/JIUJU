@@ -2,16 +2,36 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Button,
+  Card,
   Descriptions,
   Drawer,
+  Empty,
+  Pagination,
+  Segmented,
   Select,
+  Skeleton,
   Space,
   Table,
   Tag,
+  Timeline,
   Typography,
 } from "antd";
 import { adminApi } from "../../services/admin";
 import type { AdminLogItem } from "../../services/admin";
+
+const ACTION_LABEL: Record<string, string> = {
+  USER_STATUS_UPDATE: "修改用户状态",
+  PRODUCT_CREATE: "新增商品",
+  PRODUCT_UPDATE: "修改商品",
+  PRODUCT_DELETE: "删除商品",
+  USER_DELETE: "删除用户",
+  USER_SOFT_DELETE: "软删除用户",
+  ROOM_END: "结束房间",
+  DRINK_RECORD_RESTORE: "恢复饮酒记录",
+  PRODUCT_BATCH_DELETE: "批量删除商品",
+};
+
+type ViewMode = "table" | "timeline";
 
 export default function AdminLogs() {
   const [page, setPage] = useState(1);
@@ -19,6 +39,7 @@ export default function AdminLogs() {
   const [action, setAction] = useState<string | undefined>(undefined);
   const [targetType, setTargetType] = useState<string | undefined>(undefined);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [view, setView] = useState<ViewMode>("table");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "logs", page, pageSize, action, targetType],
@@ -103,8 +124,68 @@ export default function AdminLogs() {
             { value: "Product", label: "商品" },
           ]}
         />
+        <Segmented
+          value={view}
+          onChange={(v) => setView(v as ViewMode)}
+          options={[
+            { label: "表格", value: "table" },
+            { label: "时间线", value: "timeline" },
+          ]}
+        />
       </Space></div>
 
+      {view === "timeline" && (
+        <Card className="log-timeline" style={{ marginBottom: 12 }}>
+          {isLoading ? (
+            <Skeleton active paragraph={{ rows: 6 }} />
+          ) : (data?.items ?? []).length === 0 ? (
+            <Empty description="暂无日志" />
+          ) : (
+            <Timeline
+              items={(data?.items ?? []).map((r) => ({
+                color: r.action?.includes("DELETE") ? "red" : "blue",
+                children: (
+                  <div className="log-timeline-item-head">
+                    <Typography.Text strong>
+                      {r.admin?.username || "-"}
+                    </Typography.Text>
+                    <Tag color="blue">
+                      {ACTION_LABEL[r.action] || r.action}
+                    </Tag>
+                    <span className="log-timeline-time">
+                      {new Date(r.createdAt).toLocaleString("zh-CN")}
+                    </span>
+                    <Button
+                      size="small"
+                      type="link"
+                      style={{ padding: 0 }}
+                      onClick={() => setDetailId(r.id)}
+                    >
+                      详情
+                    </Button>
+                  </div>
+                ),
+              }))}
+            />
+          )}
+          <div style={{ textAlign: "right", marginTop: 8 }}>
+            <Pagination
+              size="small"
+              current={page}
+              pageSize={pageSize}
+              total={data?.total ?? 0}
+              showSizeChanger
+              pageSizeOptions={[10, 20, 50, 100]}
+              onChange={(p, ps) => {
+                setPage(p);
+                setPageSize(ps);
+              }}
+            />
+          </div>
+        </Card>
+      )}
+
+      {view === "table" && (
       <Table<AdminLogItem>
         rowKey="id"
         size="small"
@@ -124,6 +205,7 @@ export default function AdminLogs() {
         }}
         scroll={{ x: 640 }}
       />
+      )}
 
       <Drawer className="drawer-detail"
         title="日志详情"
