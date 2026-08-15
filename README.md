@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1、2、3、4、5 已完成）
+## 当前进度（Phase 1-6 已完成）
 
-当前阶段为 **Backend First · Phase 1-5：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间**，已完成：
+当前阶段为 **Backend First · Phase 1-6：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -39,8 +39,14 @@
 - 6 位邀请码（字符集 `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`，排除 `I/O/0/1`），唯一冲突自动重试
 - 非成员查看详情一律 404 `ROOM_NOT_FOUND`（不泄露房间是否存在）；仅房主可结束（成员 403）；重复结束 409 `ROOM_ALREADY_ENDED`
 - Rooms 单元测试与 E2E 测试（创建/事务回滚/邀请码/列表隔离/详情 404/结束权限/重复结束等）
+- Room Members：加入 / 成员列表 / 我的成员信息 / 退出 / 移除成员（`POST /api/v1/rooms/join`、`GET /api/v1/rooms/:id/members`、`GET /api/v1/rooms/:id/members/me`、`POST /api/v1/rooms/:id/members/leave`、`DELETE /api/v1/rooms/:id/members/:userId`）
+- 加入房间：邀请码自动 trim + 转大写 + 6 位校验；房间不存在统一 404；已结束房间 409 `ROOM_ENDED`；重复加入（含并发 P2002）409 `ALREADY_MEMBER`
+- 成员列表按 `OWNER` 优先、`joinedAt` 升序排序；仅成员可查看，非成员 404；不返回 `passwordHash` 等敏感字段
+- 退出：普通成员可退出（仅删除 RoomMember，不影响 User/Room/历史记录）；房主退出 409 `OWNER_CANNOT_LEAVE`
+- 移除成员：仅房主可操作（非房主 403 `ROOM_NOT_OWNER`）；不能移除房主 409 `CANNOT_REMOVE_OWNER`；已结束房间禁止写操作
+- Room Members 单元测试与 E2E 测试（加入/并发/大小写/列表排序/权限/ENDED 规则等）
 
-尚未实现（属于后续 Phase）：RoomMember 完整管理与加入房间、酒品、饮酒记录、统计、Admin API、用户 Web、Admin Web、微信小程序。
+尚未实现（属于后续 Phase）：酒品、饮酒记录、统计、Admin API、用户 Web、Admin Web、微信小程序。
 
 ## 核心功能
 
@@ -247,6 +253,7 @@ Prisma CLI 通过根目录 `prisma.config.ts` 加载 `apps/api/.env`。
 - `DrinkRecord` 删除使用软删除：`deletedAt`、`deletedBy`、`deleteReason`；默认查询与统计必须排除已删除记录。
 - `Product` 是“商品”，`DrinkRecord` 是“实际登记的一瓶酒”，二者是两个模型，禁止混用。
 - 房间结束后禁止新增成员与饮酒记录属于业务层规则（后续 Phase 实现），数据库结构已支持。
+- `RoomMember` 与 `DrinkRecord` 是两个独立生命周期：成员退出/被移除仅删除 `RoomMember` 行，不影响 `User`、`Room` 或历史 `DrinkRecord`。`DrinkRecord.userId` 的 `ON DELETE RESTRICT` 只约束删除 `User`，与删除 `RoomMember` 无关，因此 V1 无需为成员退出调整数据库约束。
 
 ### Migration 与 Seed
 
@@ -331,7 +338,13 @@ pnpm prisma db seed                               # 写入种子数据
   - `POST /api/v1/rooms/:id/end`：结束房间，仅房主可操作（普通成员 403 `ROOM_NOT_OWNER`）；`ACTIVE → ENDED`，`endedAt` 使用数据库时间；重复结束返回 409 `ROOM_ALREADY_ENDED`。
   - 邀请码：6 位，字符集 `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`（排除 `I/O/0/1`），数据库唯一约束兜底，冲突时自动重试重新生成。
   - V1 不提供 `DELETE /rooms/:id`，房间历史数据只允许 `ACTIVE → ENDED`，不能反向恢复。
-- `Room Members`（Phase 6）：加入房间、成员列表、踢人、转让房主等成员管理。
+- `Room Members`（房间成员，全部需要 JWT）：
+  - `POST /api/v1/rooms/join`：通过邀请码加入房间。`inviteCode` 自动 trim + 转大写，必须是 6 位有效字符；房间不存在/邀请码无效统一 404 `ROOM_NOT_FOUND`；已结束房间 409 `ROOM_ENDED`；重复加入（含并发，依赖 `UNIQUE(roomId, userId)` 捕获 P2002）409 `ALREADY_MEMBER`。
+  - `GET /api/v1/rooms/:id/members`：成员列表，仅成员可查看（非成员 404）；按 `OWNER` 优先、`joinedAt` 升序排序；返回 `userId/nickname/avatar/role/joinedAt`，不返回 `passwordHash`。
+  - `GET /api/v1/rooms/:id/members/me`：当前用户的成员信息，非成员 404。
+  - `POST /api/v1/rooms/:id/members/leave`：普通成员退出（仅删除 RoomMember，不影响 User/Room/历史 DrinkRecord）；房主不能退出 409 `OWNER_CANNOT_LEAVE`；已结束房间禁止退出 409 `ROOM_ENDED`。
+  - `DELETE /api/v1/rooms/:id/members/:userId`：房主移除普通成员；非房主 403 `ROOM_NOT_OWNER`；不能移除房主 409 `CANNOT_REMOVE_OWNER`；已结束房间禁止移除 409 `ROOM_ENDED`。
+  - 身份一律来自 JWT `sub`；禁止 body 指定 `userId`；ENDED 房间允许查看成员（历史可查），但禁止加入/退出/移除。
 - `Products`：如 `GET /api/v1/products/barcode/:barcode`；找不到时返回 `PRODUCT_NOT_FOUND`。
 - `Drinks`：`POST /api/v1/rooms/:roomId/drinks`。创建前依次校验 JWT、登记人房间成员身份、房间为 `ACTIVE`、酒品存在、实际饮用者属于房间、幂等键，然后创建或返回原记录。
 - `Stats`：房间汇总、成员排行、酒品排行与历史记录。
