@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1-10 已完成）
+## 当前进度（Phase 1-11 已完成）
 
-当前阶段为 **Backend First · Phase 1-10：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码 + 饮酒记录 + 酒局统计 + Admin API**，已完成：
+当前阶段为 **Backend First · Phase 1-11：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码 + 饮酒记录 + 酒局统计 + Admin API + 操作日志**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -72,7 +72,11 @@
   - `AdminGuard` 复用 JWT `role`：ADMIN / SUPER_ADMIN 放行，USER 403 `FORBIDDEN`
   - 管理员不能禁用自己（403 `CANNOT_DISABLE_SELF`）；身份一律来自 JWT，禁止 body 传 adminId
   - 操作日志：修改用户状态、修改商品时写入 `OperationLog`（adminUserId / action / targetType / targetId / JSON details / IP / UA），查询接口留待后续
-  - Admin API 单元测试与 E2E 测试（USER 403 / ADMIN 成功 / SUPER_ADMIN 成功 / 分页 / 状态修改 / 禁止自禁用 / 商品修改 / barcode 不可改 / 日志生成）
+  - Operation Logs：`GET /api/v1/admin/logs`（分页 + 过滤）、`GET /api/v1/admin/logs/:id`
+  - 日志过滤：`adminUserId` / `action` / `targetType` / `targetId` / `startDate` / `endDate`；默认 `createdAt` DESC；`details` 保持 JSON 返回（不解析固定结构）
+  - 日志查询仅 ADMIN / SUPER_ADMIN；不存在 404 `LOG_NOT_FOUND`；日志只能新增，不能修改/删除
+  - OperationLog 索引已具备（adminUserId / action / targetType+targetId / createdAt），无需新增 migration
+  - Admin API 单元测试与 E2E 测试（USER 403 / ADMIN 成功 / SUPER_ADMIN 成功 / 分页 / 状态修改 / 禁止自禁用 / 商品修改 / barcode 不可改 / 日志生成与查询/过滤/详情）
 
 尚未实现（属于后续 Phase）：用户 Web、Admin Web、微信小程序。
 
@@ -396,6 +400,7 @@ pnpm prisma db seed                               # 写入种子数据
   - `GET /api/v1/admin/rooms`（分页，含 owner 与 memberCount）、`GET /api/v1/admin/rooms/:id`（含 memberCount / drinkRecordCount / stats 摘要）。
   - `GET /api/v1/admin/products`（分页）、`PATCH /api/v1/admin/products/:id`（不允许修改 barcode）。
   - 修改用户状态、修改商品会写入 `OperationLog`（详情为 JSON）。
+  - `GET /api/v1/admin/logs`（分页 + 过滤 adminUserId/action/targetType/targetId/startDate/endDate，默认 createdAt 降序）、`GET /api/v1/admin/logs/:id`（不存在 404 `LOG_NOT_FOUND`）。
 
 Swagger 必须提供在：
 
