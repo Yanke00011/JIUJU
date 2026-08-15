@@ -5,6 +5,13 @@ export interface ApiResponse<T> {
   error?: { code: string; message: string };
 }
 
+export interface PageResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export type UserRole = "USER" | "ADMIN" | "SUPER_ADMIN";
 export type UserStatus = "ACTIVE" | "DISABLED";
 export type RoomStatus = "ACTIVE" | "ENDED";

@@ -6,6 +6,33 @@
 
 ---
 
+## Phase 17 — JIUJU V1.0 Release Candidate 优化（扫码登记体验 + 后台扫码录入 + UI 统一）
+
+- **状态**：已完成
+- **新增功能**：
+  1. **登记饮酒双入口**（用户端 `DrinkRecord`）：页面顶部 `[扫码添加] [选择已有酒品]` Segmented 切换。
+     - 扫码添加：保留原扫码生命周期（未改动 scanner 单实例 / scanLock / barcode 防重 / 摄像头释放）。
+     - 选择已有酒品：新增商品搜索（名称/品牌/条码，300ms 防抖，复用商品列表接口），移动端优先的卡片列表 + `[选择]`；选择后进入与扫码一致的「确认酒品」登记流程。
+     - 两种方式最终共用同一个 `POST /rooms/:id/drinks` 创建接口（单一登记逻辑）。
+  2. **抽取公共扫码组件** `apps/web/src/components/BarcodeScanner.tsx`：将原 DrinkRecord 中的 html5-qrcode 生命周期（单实例 + initializingRef + scanLockRef + 3 秒防重 + stop/clear 幂等 + StrictMode 兼容 + 卸载释放）抽取为可复用组件，通过 `ref` 暴露 `start()/stop()`，供用户登记与后台商品录入共用。
+  3. **后台商品扫码录入**（AdminProducts）：新增 `[扫码录入]` 按钮 → Modal 内复用 `BarcodeScanner`。扫码后先查库：已存在 → 展示商品信息并支持「查看商品」（跳转表格按条码过滤）；不存在 → 自动填入新增表单 barcode，管理员完善名称/品牌/分类/容量/酒精度后创建。权限继承 Admin 后台（ADMIN / SUPER_ADMIN，USER 禁止）。
+  4. **UI 统一**：选择商品卡片沿用 JIUJU Design System（`--wine` 品牌色、`--wine-soft` 分类标签、`--radius-sm` 圆角、`--shadow` hover 提升）；移动端/桌面端均验证。
+- **API 变化**：新增 `GET /api/v1/products?page=&pageSize=&keyword=`（登录用户可用，按 barcode/name/brand 关键词分页搜索；复用既有 `toProductDto` + `parsePagination` 模式，不重复造接口）。
+- **数据库变化**：无（无 Prisma migration）。
+- **影响范围**：`apps/api/src/products/products.controller.ts`、`apps/api/src/products/products.service.ts`、`apps/web/src/components/BarcodeScanner.tsx`（新增）、`apps/web/src/pages/DrinkRecord.tsx`、`apps/web/src/pages/admin/AdminProducts.tsx`、`apps/web/src/services/products.ts`、`apps/web/src/types/api.ts`、`apps/web/src/styles.css`
+- **Git commit**：`feat: optimize drink registration and admin product scanner`
+- **测试结果**：
+  - 后端 `pnpm --filter @jiuju/api typecheck` ✅、`lint` ✅、unit 145 ✅、e2e 120 ✅（含新增 GET /products 未破坏既有 products e2e 14 条）
+  - 前端 `pnpm --filter @jiuju/web typecheck` ✅、`build` ✅
+  - 浏览器实测（移动 430px + 桌面 1440px，StrictMode 开发环境）：
+    - 选择已有酒品：搜索「啤酒/白酒」命中商品卡片 → 选择 → 数量 2 → 确认登记 → DrinkRecord 正确落库（qty=2、商品快照 500ml/4.5% 正确）；
+    - 扫码模式手动条码查询、识别反馈 overlay、重新选择/继续登记流程正常；
+    - 后台「扫码录入」Modal 打开/关闭正常、摄像头随关闭释放、无 uncaught error；
+    - 摄像头实拍扫码（需真机）留待上线前人工复核。
+  - 测试数据使用 `e2e_` 前缀，已全部清理；`pnpm cleanup:test-data` 复跑确认无残留。
+
+---
+
 ## Phase 16.2 — 扫码引擎重构（生命周期修复）
 
 - **状态**：已完成

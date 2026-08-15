@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpStatus, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { toProductDto } from './product.dto';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -42,6 +42,33 @@ export class ProductsController {
   async findByBarcode(@Param('barcode') barcode: string) {
     const product = await this.productsService.findByBarcode(barcode);
     return { product: toProductDto(product) };
+  }
+
+  @Get()
+  @ApiOperation({
+    summary: '商品列表（搜索）',
+    description: '分页返回商品，支持按 barcode / name / brand 关键词搜索；供登记饮酒时「选择已有酒品」使用。',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: '获取成功',
+    schema: {
+      example: {
+        success: true,
+        data: { items: [PRODUCT_RESPONSE_EXAMPLE], total: 1, page: 1, pageSize: 20 },
+      },
+    },
+  })
+  async list(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('keyword') keyword?: string,
+  ) {
+    return this.productsService.list({
+      page: page !== undefined ? Number(page) : undefined,
+      pageSize: pageSize !== undefined ? Number(pageSize) : undefined,
+      keyword,
+    });
   }
 
   @Get(':id')

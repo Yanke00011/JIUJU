@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Key } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
+  Card,
+  Descriptions,
   Form,
   Input,
   InputNumber,
@@ -14,9 +16,14 @@ import {
   Table,
   Typography,
 } from "antd";
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  CameraOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+} from "@ant-design/icons";
 import { useAuthStore } from "../../store/auth";
 import { adminApi } from "../../services/admin";
+import { BarcodeScanner, type BarcodeScannerHandle } from "../../components/BarcodeScanner";
 import type { AdminProduct, BatchDeleteResult } from "../../services/admin";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -45,6 +52,9 @@ export default function AdminProducts() {
   const [batchResult, setBatchResult] = useState<BatchDeleteResult | null>(
     null,
   );
+  const [scanModalOpen, setScanModalOpen] = useState(false);
+  const [scanResult, setScanResult] = useState<AdminProduct | null>(null);
+  const scannerRef = useRef<BarcodeScannerHandle>(null);
   const [form] = Form.useForm();
 
   const { data, isLoading } = useQuery({
@@ -131,6 +141,53 @@ export default function AdminProducts() {
     });
   };
 
+  const openScanModal = () => {
+    setScanResult(null);
+    setScanModalOpen(true);
+  };
+
+  const closeScanModal = () => {
+    setScanModalOpen(false);
+    setScanResult(null);
+  };
+
+  /**
+   * 管理员扫码录入：
+   * 已存在 → 提示并支持「查看商品」；不存在 → 关闭扫码窗口并自动填入 barcode。
+   */
+  const handleAdminScan = async (code: string) => {
+    try {
+      const page = await adminApi.products.list({
+        keyword: code,
+        page: 1,
+        pageSize: 5,
+      });
+      const found = page.items.find((p) => p.barcode === code);
+      if (found) {
+        setScanResult(found);
+        message.warning("该商品已存在，请勿重复创建");
+        return;
+      }
+      // 不存在：自动填入新增表单
+      setScanModalOpen(false);
+      setScanResult(null);
+      setCreating(true);
+      form.resetFields();
+      form.setFieldsValue({ barcode: code });
+      message.success("该条码尚未录入，已自动填入，请完善商品信息");
+    } catch {
+      message.error("网络异常，请重试");
+    }
+  };
+
+  const viewScannedProduct = () => {
+    if (!scanResult) return;
+    setScanModalOpen(false);
+    setScanResult(null);
+    setKeyword(scanResult.barcode);
+    setPage(1);
+  };
+
   const columns = [
     { title: "条码", dataIndex: "barcode", key: "barcode" },
     { title: "名称", dataIndex: "name", key: "name" },
@@ -201,16 +258,21 @@ export default function AdminProducts() {
         <Typography.Title level={2} className="admin-page-title">
           商品管理
         </Typography.Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            setCreating(true);
-            form.resetFields();
-          }}
-        >
-          新增商品
-        </Button>
+        <Space>
+          <Button icon={<CameraOutlined />} onClick={openScanModal}>
+            扫码录入
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setCreating(true);
+              form.resetFields();
+            }}
+          >
+            新增商品
+          </Button>
+        </Space>
       </div>
 
       <div className="admin-toolbar">
@@ -332,6 +394,58 @@ export default function AdminProducts() {
             </Form.Item>
           </Space>
         </Form>
+      </Modal>
+
+      <Modal
+        title="扫码录入商品"
+        open={scanModalOpen}
+        onCancel={closeScanModal}
+        footer={null}
+        destroyOnHidden
+      >
+        {scanModalOpen && !scanResult && (
+          <BarcodeScanner
+            ref={scannerRef}
+            onScanSuccess={handleAdminScan}
+          />
+        )}
+
+        {scanModalOpen && scanResult && (
+          <div>
+            <Typography.Paragraph type="warning">
+              该商品已存在，无需重复创建。
+            </Typography.Paragraph>
+            <Card size="small" style={{ marginBottom: 12 }}>
+              <Descriptions column={1} size="small" labelStyle={{ width: 80 }}>
+                <Descriptions.Item label="名称">
+                  {scanResult.name}
+                </Descriptions.Item>
+                <Descriptions.Item label="品牌">
+                  {scanResult.brand || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="条码">
+                  {scanResult.barcode}
+                </Descriptions.Item>
+                <Descriptions.Item label="容量">
+                  {scanResult.volumeMl} ml
+                </Descriptions.Item>
+                <Descriptions.Item label="酒精度">
+                  {scanResult.alcoholPercent !== null
+                    ? `${scanResult.alcoholPercent}%`
+                    : "-"}
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+            <Space style={{ width: "100%" }}>
+              <Button block onClick={closeScanModal}>
+                关闭
+              </Button>
+              <Button type="primary" block onClick={viewScannedProduct}>
+                查看商品
+              </Button>
+            </Space>
+          </div>
+        )}
       </Modal>
 
       <Modal

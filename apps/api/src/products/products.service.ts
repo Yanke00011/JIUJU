@@ -1,9 +1,15 @@
 import { BadRequestException, HttpStatus, Injectable } from '@nestjs/common';
-import type { Product } from '@prisma/client';
+import { Prisma, type Product } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BusinessException } from '../common/exceptions/business.exception';
+import {
+  PageResult,
+  PaginationQuery,
+  parsePagination,
+} from '../common/utils/pagination';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { toProductDto, ProductDto } from './product.dto';
 
 const BARCODE_REGEX = /^\d{8,14}$/;
 
@@ -51,6 +57,33 @@ export class ProductsService {
       throw new BusinessException('PRODUCT_NOT_FOUND', '酒品不存在', HttpStatus.NOT_FOUND);
     }
     return product;
+  }
+
+  /** 分页搜索商品（登录用户可用），支持按 barcode / name / brand 关键词搜索 */
+  async list(query: PaginationQuery & { keyword?: string }): Promise<PageResult<ProductDto>> {
+    const { skip, take, page, pageSize } = parsePagination(query);
+    const where = this.buildWhere(query.keyword);
+
+    const [products, total] = await Promise.all([
+      this.prisma.product.findMany({ where, skip, take, orderBy: { createdAt: 'desc' } }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return { items: products.map(toProductDto), total, page, pageSize };
+  }
+
+  private buildWhere(keyword?: string): Prisma.ProductWhereInput {
+    if (!keyword || keyword.trim() === '') {
+      return {};
+    }
+    const kw = keyword.trim();
+    return {
+      OR: [
+        { barcode: { contains: kw, mode: 'insensitive' } },
+        { name: { contains: kw, mode: 'insensitive' } },
+        { brand: { contains: kw, mode: 'insensitive' } },
+      ],
+    };
   }
 
   async create(dto: CreateProductDto): Promise<Product> {

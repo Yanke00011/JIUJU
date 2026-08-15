@@ -838,3 +838,69 @@ body {
     opacity: 1;
   }
 }
+
+/* ===== 登记饮酒：选择已有酒品 ===== */
+.drink-record-page .ant-segmented {
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  background: var(--wine-soft);
+}
+.drink-record-page .ant-segmented-item {
+  border-radius: 10px;
+  font-weight: 600;
+}
+.product-picker .picker-hint {
+  padding: 32px 16px;
+  text-align: center;
+}
+.product-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.product-picker-card {
+  border-color: var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.product-picker-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+.picker-card-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.picker-card-info {
+  min-width: 0;
+}
+.picker-card-name {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-card-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.picker-card-cat {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--wine-soft);
+  color: var(--wine);
+  font-size: 11px;
+}
