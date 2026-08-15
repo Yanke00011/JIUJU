@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1-12 已完成）
+## 当前进度（Phase 1-13 已完成）
 
-当前阶段为 **Backend First · Phase 1-12：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码 + 饮酒记录 + 酒局统计 + Admin API + 操作日志 + 生产部署准备**，已完成：
+当前阶段为 **Phase 1-13：后端（数据库/认证/用户/房间/成员/酒品/饮酒记录/统计/Admin/日志/生产部署）+ 用户 Web 前端**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -84,8 +84,15 @@
   - Health 增强：`GET /api/v1/health` 增加数据库状态（`{ status, database }`，数据库断开返回 `unhealthy`）
   - 生产安全：JWT_SECRET 为空拒绝启动；`NODE_ENV=production` 默认关闭 Swagger（仅 `SWAGGER_ENABLED=true` 时开启）；生产 CORS 严格读取 `CORS_ORIGINS`，禁止 `*`
   - 请求日志增强：所有日志包含 `requestId / method / url / statusCode / duration`（`x-request-id` 响应头）
+- 用户 Web（`apps/web`，React 18 + TypeScript + Vite + Ant Design + React Router + Axios + Zustand + TanStack Query）：
+  - 页面：登录/注册（`/login`）、我的酒局（`/`）、创建酒局（`/rooms/create`）、加入酒局（`/rooms/join`）、酒局详情（`/rooms/:id`）
+  - 网络层 `src/services/request.ts`：自动携带 `Authorization: Bearer` token，统一处理 401（清除登录态并跳转）/403/网络错误提示
+  - 状态管理：Zustand 保存 token 与用户信息（持久化到 localStorage）
+  - 路由：`PrivateRoute` 未登录跳转 `/login`
+  - 移动端友好（Ant Design + 移动优先布局），环境变量 `VITE_API_BASE_URL`（开发环境用 Vite 代理 `/api`）
+  - 未实现：扫码、DrinkRecord、统计图表、Admin 后台、微信登录
 
-尚未实现（属于后续 Phase）：用户 Web、Admin Web、微信小程序。
+尚未实现（属于后续 Phase）：Admin Web、微信小程序。
 
 ## 核心功能
 
@@ -130,7 +137,7 @@ Admin Web ─┘        │
 | 数据库 | PostgreSQL |
 | 认证与校验 | JWT、class-validator、class-transformer |
 | API 文档 | Swagger / OpenAPI |
-| 用户 Web（后续） | Vue 3、Vite、TypeScript、Pinia、Vue Router、Tailwind CSS |
+| 用户 Web | React 18、TypeScript、Vite、Ant Design、React Router、Axios、Zustand、TanStack Query |
 | Admin Web（后续） | Vue 3、Vite、TypeScript、Pinia、Vue Router、Element Plus、ECharts |
 | 部署 | Docker Compose |
 
@@ -150,7 +157,7 @@ Admin Web ─┘        │
 jiuju/
 ├── apps/
 │   ├── api/                 # NestJS API
-│   ├── web/                 # 用户 Web（后续）
+│   ├── web/                 # 用户 Web（React）
 │   └── admin/               # 管理后台（后续）
 ├── packages/
 │   └── shared/              # 共享类型、工具与 OpenAPI 产物
@@ -209,9 +216,19 @@ pnpm prisma generate
 pnpm dev
 ```
 
-> 说明：业务数据模型、Migration 与 Seed 将在 Phase 2（数据库）添加。当前 Phase 1 仅完成 Prisma 初始化与连接配置，尚未包含任何业务模型。
+> 说明：业务数据模型、Migration 与 Seed 已在后续 Phase 完成（数据库/认证/房间/酒品/饮酒记录/统计/Admin/日志/生产部署）。
 
-完成 Web 与 Admin 应用后，开发环境可按 workspace 脚本分别或同时启动。生产环境使用：
+启动用户 Web 开发服务（新终端）：
+
+```bash
+cd apps/web
+cp .env.example .env   # VITE_API_BASE_URL 默认 /api，走 Vite 代理
+pnpm dev               # http://localhost:5173
+```
+
+Web 开发环境下 Vite 会把 `/api` 代理到 `http://localhost:3000`（见 `apps/web/vite.config.ts`）。生产环境通过 `VITE_API_BASE_URL` 指向真实 API 地址。
+
+生产环境使用：
 
 ```bash
 docker compose up -d
