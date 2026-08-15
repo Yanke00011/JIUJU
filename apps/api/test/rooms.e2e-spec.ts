@@ -156,17 +156,51 @@ describe('Rooms (e2e)', () => {
   });
 
   describe('POST /api/v1/rooms/:id/end', () => {
-    it('should let owner end an ACTIVE room', async () => {
+    it('should let owner move an ACTIVE room to ENDING (cooling period)', async () => {
       const owner = await prisma.user.findUniqueOrThrow({ where: { username: ownerUsername } });
-      const room = await prisma.room.findFirstOrThrow({ where: { ownerId: owner.id } });
+      const room = await prisma.room.create({
+        data: { name: '结束冷静期房间', ownerId: owner.id, inviteCode: 'ENDG01' },
+      });
+      await prisma.roomMember.create({
+        data: { roomId: room.id, userId: owner.id, role: 'OWNER' },
+      });
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/rooms/${room.id}/end`)
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(200);
 
-      expect(res.body.data.room.status).toBe('ENDED');
+      expect(res.body.data.room.status).toBe('ENDING');
       expect(res.body.data.room.endedAt).toBeTruthy();
+      expect(res.body.data.room.finalizedAt).toBeNull();
+    });
+
+    it('should return 409 ROOM_ALREADY_ENDING when already in ENDING', async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { username: ownerUsername } });
+      const room = await prisma.room.create({
+        data: { name: '重复结束房间', ownerId: owner.id, inviteCode: 'ENDG02', status: 'ENDING', endedAt: new Date() },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/rooms/${room.id}/end`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(409);
+
+      expect(res.body.error.code).toBe('ROOM_ALREADY_ENDING');
+    });
+
+    it('should return 409 ROOM_ALREADY_ENDED when room is already ended', async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { username: ownerUsername } });
+      const room = await prisma.room.create({
+        data: { name: '已结束房间', ownerId: owner.id, inviteCode: 'ENDG03', status: 'ENDED', endedAt: new Date(), finalizedAt: new Date() },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/rooms/${room.id}/end`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(409);
+
+      expect(res.body.error.code).toBe('ROOM_ALREADY_ENDED');
     });
 
     it('should not let a non-owner member end the room', async () => {
@@ -187,17 +221,80 @@ describe('Rooms (e2e)', () => {
 
       expect(res.body.error.code).toBe('ROOM_NOT_OWNER');
     });
+  });
 
-    it('should return 409 when room is already ended', async () => {
+  describe('POST /api/v1/rooms/:id/cancel-end', () => {
+    it('should let owner cancel an ENDING room back to ACTIVE', async () => {
       const owner = await prisma.user.findUniqueOrThrow({ where: { username: ownerUsername } });
-      const room = await prisma.room.findFirstOrThrow({ where: { ownerId: owner.id } });
+      const room = await prisma.room.create({
+        data: { name: '撤销结束房间', ownerId: owner.id, inviteCode: 'CANC01', status: 'ENDING', endedAt: new Date() },
+      });
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/rooms/${room.id}/end`)
+        .post(`/api/v1/rooms/${room.id}/cancel-end`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+
+      expect(res.body.data.room.status).toBe('ACTIVE');
+      expect(res.body.data.room.endedAt).toBeNull();
+    });
+
+    it('should not let a non-owner cancel the ending', async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { username: ownerUsername } });
+      const member = await prisma.user.findUniqueOrThrow({ where: { username: memberUsername } });
+      const room = await prisma.room.create({
+        data: { name: '成员撤销房间', ownerId: owner.id, inviteCode: 'CANC02', status: 'ENDING', endedAt: new Date() },
+      });
+      await prisma.roomMember.create({
+        data: { roomId: room.id, userId: member.id, role: 'MEMBER' },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/rooms/${room.id}/cancel-end`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .expect(403);
+
+      expect(res.body.error.code).toBe('ROOM_NOT_OWNER');
+    });
+
+    it('should return 409 when room is not ENDING', async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { username: ownerUsername } });
+      const room = await prisma.room.create({
+        data: { name: '非结束房间', ownerId: owner.id, inviteCode: 'CANC03' },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/rooms/${room.id}/cancel-end`)
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(409);
 
-      expect(res.body.error.code).toBe('ROOM_ALREADY_ENDED');
+      expect(res.body.error.code).toBe('ROOM_NOT_ENDING');
+    });
+  });
+
+  describe('lazy finalize (cooling period expiry)', () => {
+    it('should auto-finalize an expired ENDING room to ENDED on GET', async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { username: ownerUsername } });
+      const room = await prisma.room.create({
+        data: {
+          name: '自动归档房间',
+          ownerId: owner.id,
+          inviteCode: 'FINL01',
+          status: 'ENDING',
+          endedAt: new Date(Date.now() - 16 * 60 * 1000),
+        },
+      });
+      await prisma.roomMember.create({
+        data: { roomId: room.id, userId: owner.id, role: 'OWNER' },
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/rooms/${room.id}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+
+      expect(res.body.data.room.status).toBe('ENDED');
+      expect(res.body.data.room.finalizedAt).toBeTruthy();
     });
   });
 });

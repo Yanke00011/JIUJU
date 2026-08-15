@@ -116,10 +116,13 @@ export class RoomController {
 
   @Post(':id/end')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '结束酒局', description: '仅房主可结束，结束后不可再结束。' })
+  @ApiOperation({
+    summary: '结束酒局（进入冷静期）',
+    description: '仅房主可操作；ACTIVE → ENDING（15 分钟冷静期），结束后可在冷静期内撤销。',
+  })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: '结束成功',
+    description: '进入结束流程',
     schema: {
       example: {
         success: true,
@@ -128,10 +131,11 @@ export class RoomController {
             id: 'b6c8f2b0-4c3e-4a5b-9f8e-1a2b3c4d5e6f',
             name: '周末朋友酒局',
             inviteCode: 'A7K92P',
-            status: 'ENDED',
+            status: 'ENDING',
             ownerId: 'b6c8f2b0-4c3e-4a5b-9f8e-1a2b3c4d5e6f',
             createdAt: '2026-08-15T04:10:20.000Z',
             endedAt: '2026-08-15T05:00:00.000Z',
+            finalizedAt: null,
           },
         },
       },
@@ -149,16 +153,68 @@ export class RoomController {
   })
   @ApiResponse({
     status: HttpStatus.CONFLICT,
-    description: '房间已结束',
+    description: '房间已在结束流程中或已结束',
     schema: {
       example: {
         success: false,
-        error: { code: 'ROOM_ALREADY_ENDED', message: '房间已结束' },
+        error: { code: 'ROOM_ALREADY_ENDING', message: '房间已进入结束流程，等待冷静期结束' },
       },
     },
   })
   async endRoom(@CurrentUser() user: PublicUser, @Param('id') id: string) {
     const room = await this.roomService.endRoom(user.id, id);
+    return { room };
+  }
+
+  @Post(':id/cancel-end')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: '撤销结束酒局（仅冷静期内）',
+    description: '仅房主可操作；须 status=ENDING → 恢复为 ACTIVE，endedAt 清空。',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: '撤销成功',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          room: {
+            id: 'b6c8f2b0-4c3e-4a5b-9f8e-1a2b3c4d5e6f',
+            name: '周末朋友酒局',
+            inviteCode: 'A7K92P',
+            status: 'ACTIVE',
+            ownerId: 'b6c8f2b0-4c3e-4a5b-9f8e-1a2b3c4d5e6f',
+            createdAt: '2026-08-15T04:10:20.000Z',
+            endedAt: null,
+            finalizedAt: null,
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: '只有房主才能撤销结束',
+    schema: {
+      example: {
+        success: false,
+        error: { code: 'ROOM_NOT_OWNER', message: '只有房主才能撤销结束' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description: '房间不在结束流程中',
+    schema: {
+      example: {
+        success: false,
+        error: { code: 'ROOM_NOT_ENDING', message: '房间不在结束流程中，无法撤销' },
+      },
+    },
+  })
+  async cancelEnd(@CurrentUser() user: PublicUser, @Param('id') id: string) {
+    const room = await this.roomService.cancelEnd(user.id, id);
     return { room };
   }
 }

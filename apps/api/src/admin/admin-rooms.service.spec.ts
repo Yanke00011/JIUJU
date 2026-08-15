@@ -47,6 +47,7 @@ describe('AdminRoomsService', () => {
     room: { findMany: jest.Mock; count: jest.Mock; findUnique: jest.Mock; update: jest.Mock };
     roomMember: { findMany: jest.Mock };
     drinkRecord: { findMany: jest.Mock; count: jest.Mock };
+    user: { findUnique: jest.Mock };
     $queryRaw: jest.Mock;
     operationLog: { create: jest.Mock };
   };
@@ -58,6 +59,7 @@ describe('AdminRoomsService', () => {
       room: { findMany: jest.fn(), count: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
       roomMember: { findMany: jest.fn() },
       drinkRecord: { findMany: jest.fn(), count: jest.fn() },
+      user: { findUnique: jest.fn() },
       $queryRaw: jest.fn(),
       operationLog: { create: jest.fn() },
     };
@@ -136,15 +138,16 @@ describe('AdminRoomsService', () => {
   });
 
   describe('endRoom', () => {
-    it('should end an ACTIVE room and log', async () => {
+    it('should move an ACTIVE room to ENDING and log ROOM_END_REQUEST', async () => {
       prisma.room.findUnique.mockResolvedValue(makeRoom());
-      prisma.room.update.mockResolvedValue(makeRoom({ status: 'ENDED', endedAt: new Date() }));
+      prisma.room.update.mockResolvedValue(makeRoom({ status: 'ENDING', endedAt: new Date() }));
+      prisma.user.findUnique.mockResolvedValue({ username: 'admin' });
 
       const result = await service.endRoom(ADMIN_ID, ROOM_ID, request);
 
-      expect(result.status).toBe('ENDED');
+      expect(result.status).toBe('ENDING');
       expect(logService.log).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'ROOM_END' }),
+        expect.objectContaining({ action: 'ROOM_END_REQUEST' }),
       );
     });
 
@@ -154,6 +157,15 @@ describe('AdminRoomsService', () => {
       await expect(service.endRoom(ADMIN_ID, ROOM_ID, request)).rejects.toMatchObject({
         status: HttpStatus.CONFLICT,
         response: { code: 'ROOM_ALREADY_ENDED' },
+      });
+    });
+
+    it('should reject ending a room already in ENDING', async () => {
+      prisma.room.findUnique.mockResolvedValue(makeRoom({ status: 'ENDING' }));
+
+      await expect(service.endRoom(ADMIN_ID, ROOM_ID, request)).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        response: { code: 'ROOM_ALREADY_ENDING' },
       });
     });
   });

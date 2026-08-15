@@ -108,8 +108,20 @@ export default function AdminRooms() {
       dataIndex: "status",
       key: "status",
       render: (status: AdminRoomItem["status"]) => (
-        <Tag color={status === "ACTIVE" ? "green" : "default"}>
-          {status === "ACTIVE" ? "进行中" : "已结束"}
+        <Tag
+          color={
+            status === "ACTIVE"
+              ? "green"
+              : status === "ENDING"
+                ? "gold"
+                : "default"
+          }
+        >
+          {status === "ACTIVE"
+            ? "进行中"
+            : status === "ENDING"
+              ? "即将结束"
+              : "已结束"}
         </Tag>
       ),
     },
@@ -207,7 +219,11 @@ export default function AdminRooms() {
                 {detail.owner?.nickname || detail.owner?.username || "-"}
               </Descriptions.Item>
               <Descriptions.Item label="状态">
-                {detail.status === "ACTIVE" ? "进行中" : "已结束"}
+                {detail.status === "ACTIVE"
+                  ? "进行中"
+                  : detail.status === "ENDING"
+                    ? "即将结束（冷静期）"
+                    : "已结束"}
               </Descriptions.Item>
               <Descriptions.Item label="成员数">
                 {detail.memberCount}

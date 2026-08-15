@@ -6,6 +6,31 @@
 
 ---
 
+## Phase 17.4.1 — 酒局结束冷静期机制
+
+- **状态**：已完成
+- **背景**：真实聚会存在误操作（点错结束 / 临时补登记 / 想恢复 / 手机误触），直接 ACTIVE → ENDED 不可恢复。本阶段引入「结束请求 → 冷静期 → 正式归档」流程。
+- **数据库变化**：`RoomStatus` 枚举增加 `ENDING`；`Room` 增加 `finalizedAt DateTime?`（正式归档时间）。新增迁移 `20260815100931_room_ending_and_finalized`。
+- **状态机**：`ACTIVE →（房主/管理员结束）→ ENDING →（15 分钟冷静期到期，懒归档）→ ENDED`；`ENDING →（房主撤销）→ ACTIVE`。
+- **API 变化**：
+  - `POST /api/v1/rooms/:id/end`（保留）：`ACTIVE → ENDING`；`ENDING` → 409 `ROOM_ALREADY_ENDING`；`ENDED` → 409 `ROOM_ALREADY_ENDED`；非房主 403 不变。
+  - 新增 `POST /api/v1/rooms/:id/cancel-end`：仅房主，须 `ENDING` → `ACTIVE`（`endedAt=null`）；非房主 403、非 ENDING 409 `ROOM_NOT_ENDING`。
+  - 加入房间：`ENDING` 也禁止 → 409 `ROOM_ENDING`「房间即将结束，无法加入」；登记饮酒：`ENDING` 也禁止 → 409 `ROOM_ENDING`「房间即将结束，无法登记」。
+  - 管理端结束房间：同样进入 `ENDING`（`ROOM_END_REQUEST`）。
+  - 懒归档：`GET /rooms`、`GET /rooms/:id`、管理端房间列表/详情在访问时，若 `ENDING` 且 `now > endedAt + 15min` 自动置 `ENDED`、写 `finalizedAt`（不依赖前端/定时任务）。
+- **操作日志**：新增 `ROOM_END_REQUEST`（房主/管理员）、`ROOM_END_CANCEL`（房主）、`ROOM_FINALIZED`（系统自动，`adminUserId=null`），details 含 `roomId/operator/oldStatus/newStatus`。
+- **权限规则**：结束/撤销结束仅房主（或管理员）；普通成员仅可查看「即将结束」提示，不可操作；`ENDING/ENDED` 期间禁止登记、加入。
+- **前端变化**：
+  - RoomDetail：房主 `ACTIVE` 显示「结束酒局」（Popconfirm）；`ENDING` 显示「酒局即将结束 · 剩余 mm:ss」倒计时 + 房主「撤销结束」；普通成员见「（房主可撤销）」提示；`ENDED` 显示「已结束」；底部「登记饮酒」在非 ACTIVE 下禁用。倒计时归零自动重拉房间（自动归档）。
+  - MyRooms：`ENDING` 归入「进行中」Tab，状态显示「即将结束」；`ENDED` 进「历史」。
+  - 管理后台：房间状态 Tag 增加「即将结束」（金色）；日志动作标签/过滤器增加三条新 action。
+- **影响范围**：`prisma/schema.prisma` + 迁移、`apps/api/src/rooms/`、`room-members/`、`drink-records/`、`admin/admin-rooms.service.ts`、`admin/operation-logs.service.ts`、相应 spec 与 e2e；`apps/web/src/types/api.ts`、`services/rooms.ts`、`pages/RoomDetail.tsx`、`components/MyRooms.tsx`、`pages/admin/AdminRooms.tsx`、`AdminDashboard.tsx`、`AdminLogs.tsx`、`styles.css`
+- **测试结果**：后端 typecheck/lint ✅、unit 159 ✅（+8）、e2e 134 ✅（+7：结束→ENDING、重复结束 409、ENDED 409、非房主 403、撤销→ACTIVE、非 ENDING 撤销 409、过期懒归档、ENDING 禁止登记/加入）；前端 typecheck/build ✅；浏览器实测（390/768 宽）：房主结束按钮与确认、ENDING 倒计时、撤销成功、成员无操作权限、ENDED 显示历史、管理端「即将结束」Tag、OperationLog 三态落库均正常。
+- **测试数据**：`e2e_` 前缀房间/用户已全部清理，`cleanup:test-data` 复跑无残留。
+- **Git commit**：`feat: add room end cooling period`
+
+---
+
 ## Phase 17.3.2 — Admin 用户权限管理增强
 
 - **状态**：已完成

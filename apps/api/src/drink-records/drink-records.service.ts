@@ -166,6 +166,9 @@ export class DrinkRecordsService {
     }
 
     const room = await this.prisma.room.findUniqueOrThrow({ where: { id: roomId } });
+    if (room.status === 'ENDING') {
+      throw new BusinessException('ROOM_ENDING', '房间即将结束，无法登记', HttpStatus.CONFLICT);
+    }
     if (room.status === 'ENDED') {
       throw new BusinessException('ROOM_ENDED', '房间已结束，无法操作', HttpStatus.CONFLICT);
     }

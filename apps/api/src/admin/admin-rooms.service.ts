@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BusinessException } from '../common/exceptions/business.exception';
 import { PageResult, parsePagination, PaginationQuery } from '../common/utils/pagination';
 import { OperationLogService } from './operation-logs.service';
+import { ROOM_END_COOLING_MS } from '../rooms/rooms.service';
 
 export interface AdminRoomItem {
   id: string;
@@ -15,6 +16,7 @@ export interface AdminRoomItem {
   status: Room['status'];
   createdAt: Date;
   endedAt: Date | null;
+  finalizedAt: Date | null;
 }
 
 export interface AdminRoomDetail extends AdminRoomItem {
@@ -62,6 +64,7 @@ interface RoomWithCounts {
   status: Room['status'];
   createdAt: Date;
   endedAt: Date | null;
+  finalizedAt: Date | null;
   owner: { id: string; username: string; nickname: string } | null;
   _count: { members: number };
 }
@@ -102,33 +105,38 @@ export class AdminRoomsService {
       this.prisma.room.count({ where }),
     ]);
 
-    return {
-      items: (rooms as unknown as RoomWithCounts[]).map((room) => ({
-        id: room.id,
-        name: room.name,
-        owner: room.owner,
-        memberCount: room._count.members,
-        status: room.status,
-        createdAt: room.createdAt,
-        endedAt: room.endedAt,
-      })),
-      total,
-      page,
-      pageSize,
-    };
+    const items = await Promise.all(
+      (rooms as unknown as RoomWithCounts[]).map(async (room) => {
+        const finalized = await this.finalizeExpiredRoom(room);
+        return {
+          id: finalized.id,
+          name: finalized.name,
+          owner: room.owner,
+          memberCount: room._count.members,
+          status: finalized.status,
+          createdAt: finalized.createdAt,
+          endedAt: finalized.endedAt,
+          finalizedAt: finalized.finalizedAt ?? room.finalizedAt,
+        };
+      }),
+    );
+
+    return { items, total, page, pageSize };
   }
 
   async getById(id: string): Promise<AdminRoomDetail> {
-    const room = await this.prisma.room.findUnique({
+    const found = await this.prisma.room.findUnique({
       where: { id },
       include: {
         owner: { select: { id: true, username: true, nickname: true } },
         _count: { select: { members: true, drinkRecords: true } },
       },
     });
-    if (!room) {
+    if (!found) {
       throw new BusinessException('ROOM_NOT_FOUND', '房间不存在', HttpStatus.NOT_FOUND);
     }
+    // 懒归档：过冷静期的 ENDING 房间先转为 ENDED（用 current 的状态，owner/_count 仍取 found）
+    const current = await this.finalizeExpiredRoom(found);
 
     const agg = await this.prisma.$queryRaw<DrinkAggRow[]>`
       SELECT
@@ -144,14 +152,15 @@ export class AdminRoomsService {
     const aggRow = agg[0];
 
     return {
-      id: room.id,
-      name: room.name,
-      owner: room.owner,
-      memberCount: room._count.members,
-      drinkRecordCount: room._count.drinkRecords,
-      status: room.status,
-      createdAt: room.createdAt,
-      endedAt: room.endedAt,
+      id: found.id,
+      name: found.name,
+      owner: found.owner,
+      memberCount: found._count.members,
+      drinkRecordCount: found._count.drinkRecords,
+      status: current.status,
+      createdAt: found.createdAt,
+      endedAt: current.endedAt,
+      finalizedAt: current.finalizedAt ?? found.finalizedAt,
       stats: {
         totalQuantity: toNumber(aggRow?.totalQuantity),
         totalVolumeMl: toNumber(aggRow?.totalVolumeMl),
@@ -213,32 +222,74 @@ export class AdminRoomsService {
     };
   }
 
-  /** 结束房间（管理员），仅 ACTIVE → ENDED。 */
+  /**
+   * 结束房间（管理员）：进入结束冷静期（ACTIVE → ENDING）。
+   * 已在结束流程中返回 409；已结束返回 409。
+   */
   async endRoom(adminUserId: string, roomId: string, request: Request): Promise<Room> {
     const room = await this.prisma.room.findUnique({ where: { id: roomId } });
     if (!room) {
       throw new BusinessException('ROOM_NOT_FOUND', '房间不存在', HttpStatus.NOT_FOUND);
     }
-    if (room.status === 'ENDED') {
+    const current = await this.finalizeExpiredRoom(room);
+    if (current.status === 'ENDED') {
       throw new BusinessException('ROOM_ALREADY_ENDED', '房间已结束', HttpStatus.CONFLICT);
     }
+    if (current.status === 'ENDING') {
+      throw new BusinessException('ROOM_ALREADY_ENDING', '房间已进入结束流程', HttpStatus.CONFLICT);
+    }
 
-    const ended = await this.prisma.room.update({
+    const ending = await this.prisma.room.update({
       where: { id: roomId },
-      data: { status: 'ENDED', endedAt: new Date() },
+      data: { status: 'ENDING', endedAt: new Date(), finalizedAt: null },
     });
 
+    const admin = await this.prisma.user.findUnique({
+      where: { id: adminUserId },
+      select: { username: true },
+    });
     await this.operationLog.log({
       adminUserId,
-      action: 'ROOM_END',
+      action: 'ROOM_END_REQUEST',
       targetType: 'Room',
       targetId: roomId,
-      metadata: {},
+      metadata: {
+        roomId,
+        operator: admin?.username ?? adminUserId,
+        oldStatus: current.status,
+        newStatus: 'ENDING',
+      },
       ip: request.ip,
       userAgent: request.headers['user-agent'] ?? null,
     });
 
-    return ended;
+    return ending;
+  }
+
+  /** 懒归档：过冷静期的 ENDING 房间自动转为 ENDED。 */
+  private async finalizeExpiredRoom(
+    room: Pick<Room, 'id' | 'status' | 'endedAt'>,
+  ): Promise<Room> {
+    if (room.status !== 'ENDING' || !room.endedAt) {
+      return room as Room;
+    }
+    if (Date.now() <= room.endedAt.getTime() + ROOM_END_COOLING_MS) {
+      return room as Room;
+    }
+    const finalized = await this.prisma.room.update({
+      where: { id: room.id },
+      data: { status: 'ENDED', finalizedAt: new Date() },
+    });
+    await this.operationLog.log({
+      adminUserId: null,
+      action: 'ROOM_FINALIZED',
+      targetType: 'Room',
+      targetId: room.id,
+      metadata: { roomId: room.id, operator: 'system', oldStatus: 'ENDING', newStatus: 'ENDED' },
+      ip: null,
+      userAgent: null,
+    });
+    return finalized;
   }
 
   /** 导出房间饮酒记录 CSV（包含已软删除记录）。 */

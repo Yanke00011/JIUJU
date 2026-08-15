@@ -1166,6 +1166,36 @@ body {
 .record-action-bar .ant-btn {
   height: 48px;
 }
+.record-action-bar-inner {
+  display: flex;
+  gap: 12px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+.record-action-bar-inner .ant-btn {
+  flex: 1;
+}
+.room-ending-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(230, 162, 60, 0.16);
+  color: #fff;
+  font-size: 13px;
+}
+.room-ending-banner b {
+  color: #ffd591;
+  letter-spacing: 0.05em;
+}
+.room-ending-banner .ant-btn {
+  margin-left: auto;
+  height: 28px;
+  font-size: 12px;
+}
 
 /* 日志时间线 */
 .log-timeline .ant-timeline-item-tail {

@@ -22,7 +22,9 @@ const ACTION_LABEL: Record<string, string> = {
   PRODUCT_DELETE: "删除商品",
   USER_DELETE: "删除用户",
   USER_SOFT_DELETE: "软删除用户",
-  ROOM_END: "结束房间",
+  ROOM_END_REQUEST: "结束房间",
+  ROOM_END_CANCEL: "撤销结束",
+  ROOM_FINALIZED: "酒局归档",
   DRINK_RECORD_RESTORE: "恢复饮酒记录",
   PRODUCT_BATCH_DELETE: "批量删除商品",
 };

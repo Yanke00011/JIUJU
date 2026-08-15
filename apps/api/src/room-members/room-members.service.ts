@@ -43,6 +43,9 @@ export class RoomMembersService {
     if (!room) {
       throw new BusinessException('ROOM_NOT_FOUND', '房间不存在', HttpStatus.NOT_FOUND);
     }
+    if (room.status === 'ENDING') {
+      throw new BusinessException('ROOM_ENDING', '房间即将结束，无法加入', HttpStatus.CONFLICT);
+    }
     if (room.status === 'ENDED') {
       throw new BusinessException('ROOM_ENDED', '房间已结束，无法加入', HttpStatus.CONFLICT);
     }

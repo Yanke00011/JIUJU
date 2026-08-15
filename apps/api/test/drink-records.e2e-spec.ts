@@ -192,6 +192,25 @@ describe('Drink Records (e2e)', () => {
 
       expect(res.body.error.code).toBe('ROOM_NOT_FOUND');
     });
+
+    it('should reject registering in an ENDING room with 409 ROOM_ENDING', async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { username: ownerName } });
+      const member = await prisma.user.findUniqueOrThrow({ where: { username: memberName } });
+      const endingRoom = await prisma.room.create({
+        data: { name: '冷静期登记房间', ownerId: owner.id, inviteCode: 'ENDR01', status: 'ENDING', endedAt: new Date() },
+      });
+      await prisma.roomMember.create({
+        data: { roomId: endingRoom.id, userId: member.id, role: 'MEMBER' },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/rooms/${endingRoom.id}/drinks`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ productId, userId: memberUserId, quantity: 1 })
+        .expect(409);
+
+      expect(res.body.error.code).toBe('ROOM_ENDING');
+    });
   });
 
   describe('GET /api/v1/rooms/:id/drinks', () => {

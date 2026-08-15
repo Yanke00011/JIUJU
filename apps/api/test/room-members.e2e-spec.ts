@@ -283,6 +283,11 @@ describe('Room Members (e2e)', () => {
         .post(`/api/v1/rooms/${endedRoomId}/end`)
         .set('Authorization', `Bearer ${tokenA}`)
         .expect(200);
+      // 模拟冷静期结束：直接置为 ENDED
+      await prisma.room.update({
+        where: { id: endedRoomId },
+        data: { status: 'ENDED', finalizedAt: new Date() },
+      });
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/rooms/join')
@@ -291,6 +296,28 @@ describe('Room Members (e2e)', () => {
         .expect(409);
 
       expect(res.body.error.code).toBe('ROOM_ENDED');
+    });
+
+    it('should reject joining an ENDING room with 409 ROOM_ENDING', async () => {
+      const create = await request(app.getHttpServer())
+        .post('/api/v1/rooms')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ name: '冷静期加入房间' })
+        .expect(201);
+      const roomId = create.body.data.room.id;
+
+      await prisma.room.update({
+        where: { id: roomId },
+        data: { status: 'ENDING', endedAt: new Date() },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/rooms/join')
+        .set('Authorization', `Bearer ${tokenB}`)
+        .send({ inviteCode: create.body.data.room.inviteCode })
+        .expect(409);
+
+      expect(res.body.error.code).toBe('ROOM_ENDING');
     });
   });
 });

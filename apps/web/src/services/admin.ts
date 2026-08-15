@@ -23,9 +23,10 @@ export interface AdminRoomItem {
   name: string;
   owner: { id: string; username: string; nickname: string } | null;
   memberCount: number;
-  status: "ACTIVE" | "ENDED";
+  status: "ACTIVE" | "ENDING" | "ENDED";
   createdAt: string;
   endedAt: string | null;
+  finalizedAt: string | null;
 }
 
 export interface AdminRoomDetail extends AdminRoomItem {

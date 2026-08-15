@@ -38,6 +38,7 @@ enum UserStatus {
 
 enum RoomStatus {
   ACTIVE
+  ENDING
   ENDED
 }
 
@@ -97,7 +98,8 @@ model Room {
   status     RoomStatus @default(ACTIVE)
   createdAt  DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime   @updatedAt @db.Timestamptz(3)
-  endedAt    DateTime?  @db.Timestamptz(3)
+  endedAt    DateTime?  @db.Timestamptz(3) // 结束请求时间：ACTIVE→ENDING 时写入；ENDED 时也是结束时间
+  finalizedAt DateTime? @db.Timestamptz(3) // 正式归档时间：冷静期结束后自动写入
 
   owner        User          @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   members      RoomMember[]

@@ -667,7 +667,7 @@ describe('Admin (e2e)', () => {
   });
 
   describe('Admin room end & drinks', () => {
-    it('should end a room', async () => {
+    it('should end a room (enters ENDING cooling period)', async () => {
       const adminUser = await prisma.user.findUniqueOrThrow({ where: { username: adminName } });
       const room = await prisma.room.create({
         data: { name: '结束测试房间', ownerId: adminUser.id, inviteCode: 'ENDT01' },
@@ -681,7 +681,7 @@ describe('Admin (e2e)', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
-      expect(res.body.data.room.status).toBe('ENDED');
+      expect(res.body.data.room.status).toBe('ENDING');
     });
 
     it('should export room drinks as CSV', async () => {

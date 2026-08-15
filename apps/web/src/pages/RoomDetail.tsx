@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Avatar,
   Button,
   Card,
   Empty,
   List,
+  Popconfirm,
   Progress,
   Skeleton,
   Space,
@@ -18,6 +20,7 @@ import {
   UserOutlined,
   EditOutlined,
   CopyOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import { roomsApi } from "../services/rooms";
@@ -25,15 +28,27 @@ import { statisticsApi } from "../services/statistics";
 import { useAuthStore } from "../store/auth";
 import type { Room } from "../types/api";
 
+/** 结束冷静期：15 分钟 */
+const ROOM_END_COOLING_MS = 15 * 60 * 1000;
+
 const STATUS_LABEL: Record<Room["status"], { text: string; color: string }> = {
   ACTIVE: { text: "进行中", color: "green" },
+  ENDING: { text: "即将结束", color: "gold" },
   ENDED: { text: "已结束", color: "default" },
 };
+
+function formatRemaining(ms: number): string {
+  const safe = Math.max(0, ms);
+  const mm = Math.floor(safe / 60000);
+  const ss = Math.floor((safe % 60000) / 1000);
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
 
 export default function RoomDetail() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const userId = useAuthStore((state) => state.user?.id);
+  const queryClient = useQueryClient();
 
   const roomQuery = useQuery({
     queryKey: ["room", id],
@@ -52,6 +67,51 @@ export default function RoomDetail() {
   });
 
   const room = roomQuery.data;
+
+  // ===== 结束冷静期倒计时：归零后自动归档（重新拉取房间）=====
+  const [remaining, setRemaining] = useState(0);
+
+  useEffect(() => {
+    if (room?.status !== "ENDING" || !room.endedAt) return;
+    const target = new Date(room.endedAt).getTime() + ROOM_END_COOLING_MS;
+    const tick = () => {
+      const rem = target - Date.now();
+      if (rem <= 0) {
+        setRemaining(0);
+        void roomQuery.refetch();
+        return;
+      }
+      setRemaining(rem);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.status, room?.endedAt]);
+
+  const refreshRoomsList = () => {
+    queryClient.invalidateQueries({ queryKey: ["rooms"] });
+  };
+
+  const endMutation = useMutation({
+    mutationFn: () => roomsApi.end(id),
+    onSuccess: () => {
+      message.success("已进入结束流程，15 分钟内可撤销");
+      void roomQuery.refetch();
+      refreshRoomsList();
+    },
+  });
+
+  const cancelEndMutation = useMutation({
+    mutationFn: () => roomsApi.cancelEnd(id),
+    onSuccess: () => {
+      message.success("已撤销结束，酒局恢复进行中");
+      void roomQuery.refetch();
+      refreshRoomsList();
+    },
+  });
+
+  const isOwner = room?.ownerId === userId;
 
   if (roomQuery.isLoading) {
     return (
@@ -117,8 +177,34 @@ export default function RoomDetail() {
           <Typography.Title level={4} style={{ margin: 0 }}>
             {room.name}
           </Typography.Title>
-          <Tag color={room.status === "ACTIVE" ? "gold" : "default"}>{status.text}</Tag>
+          <Tag color={room.status === "ENDED" ? "default" : "gold"}>{status.text}</Tag>
         </div>
+
+        {/* 结束冷静期提示 */}
+        {room.status === "ENDING" && (
+          <div className="room-ending-banner">
+            <ClockCircleOutlined style={{ marginRight: 6 }} />
+            <span>
+              酒局即将结束 · 剩余 <b>{formatRemaining(remaining)}</b>
+              {!isOwner && "（房主可撤销）"}
+            </span>
+            {isOwner && (
+              <Popconfirm
+                title="确定撤销结束？酒局将恢复为进行中。"
+                onConfirm={() => cancelEndMutation.mutate()}
+              >
+                <Button
+                  size="small"
+                  type="primary"
+                  ghost
+                  loading={cancelEndMutation.isPending}
+                >
+                  撤销结束
+                </Button>
+              </Popconfirm>
+            )}
+          </div>
+        )}
 
         <Space
           direction="vertical"
@@ -280,18 +366,36 @@ export default function RoomDetail() {
         </div>
       </Card>
 
-      {/* 底部固定登记按钮 */}
+      {/* 底部固定操作栏 */}
       <div className="record-action-bar">
-        <div style={{ maxWidth: 760, margin: "0 auto" }}>
+        <div className="record-action-bar-inner">
+          {room.status === "ACTIVE" && isOwner && (
+            <Popconfirm
+              title="确定结束该酒局？结束后 15 分钟内可以撤销。"
+              onConfirm={() => endMutation.mutate()}
+              okText="结束"
+            >
+              <Button
+                size="large"
+                loading={endMutation.isPending}
+                disabled={cancelEndMutation.isPending}
+              >
+                结束酒局
+              </Button>
+            </Popconfirm>
+          )}
           <Button
             type="primary"
             size="large"
-            block
             icon={<EditOutlined />}
-            disabled={room.status === "ENDED"}
+            disabled={room.status !== "ACTIVE"}
             onClick={() => navigate(`/rooms/${id}/drink`)}
           >
-            {room.status === "ENDED" ? "酒局已结束" : "登记饮酒"}
+            {room.status === "ACTIVE"
+              ? "登记饮酒"
+              : room.status === "ENDING"
+                ? "酒局即将结束"
+                : "酒局已结束"}
           </Button>
         </div>
       </div>

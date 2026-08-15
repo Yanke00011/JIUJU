@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface OperationLogInput {
-  adminUserId: string;
+  adminUserId: string | null; // null 表示系统自动动作（如房间自动归档）
   action: string;
   targetType: string;
   targetId: string;

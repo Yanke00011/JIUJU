@@ -16,6 +16,7 @@ const makeRoom = (overrides: Partial<Room> = {}): Room => ({
   createdAt: new Date('2026-08-15T04:10:20.000Z'),
   updatedAt: new Date('2026-08-15T04:10:20.000Z'),
   endedAt: null,
+  finalizedAt: null,
   ...overrides,
 });
 
@@ -28,23 +29,30 @@ describe('RoomService', () => {
   let service: RoomService;
   let prisma: {
     $transaction: jest.Mock;
-    $executeRaw: jest.Mock;
-    room: { findUnique: jest.Mock; findUniqueOrThrow: jest.Mock };
+    room: {
+      findUnique: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
+      update: jest.Mock;
+    };
     roomMember: { findUnique: jest.Mock; findMany: jest.Mock };
+    user: { findUnique: jest.Mock };
+    operationLog: { create: jest.Mock };
   };
 
   beforeEach(async () => {
     prisma = {
       $transaction: jest.fn(),
-      $executeRaw: jest.fn().mockResolvedValue(1),
       room: {
         findUnique: jest.fn(),
         findUniqueOrThrow: jest.fn(),
+        update: jest.fn(),
       },
       roomMember: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
       },
+      user: { findUnique: jest.fn() },
+      operationLog: { create: jest.fn() },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -199,17 +207,29 @@ describe('RoomService', () => {
   });
 
   describe('endRoom', () => {
-    it('should let owner end an ACTIVE room and set endedAt', async () => {
+    it('should move an ACTIVE room to ENDING and write an operation log', async () => {
       const room = makeRoom();
-      const ended = makeRoom({ status: 'ENDED', endedAt: new Date('2026-08-15T05:00:00.000Z') });
+      const ending = makeRoom({ status: 'ENDING', endedAt: new Date('2026-08-15T05:00:00.000Z') });
       prisma.room.findUnique.mockResolvedValue(room);
-      prisma.room.findUniqueOrThrow.mockResolvedValue(ended);
+      prisma.room.update.mockResolvedValue(ending);
+      prisma.user.findUnique.mockResolvedValue({ username: 'owner' });
 
       const result = await service.endRoom(USER_ID, room.id);
 
-      expect(prisma.$executeRaw).toHaveBeenCalled();
-      expect(result.status).toBe('ENDED');
-      expect(result.endedAt).toBeInstanceOf(Date);
+      expect(prisma.room.update).toHaveBeenCalledWith({
+        where: { id: room.id },
+        data: { status: 'ENDING', endedAt: expect.any(Date), finalizedAt: null },
+      });
+      expect(prisma.operationLog.create).toHaveBeenCalledWith(
+        { data: expect.objectContaining({
+          adminUserId: USER_ID,
+          action: 'ROOM_END_REQUEST',
+          targetType: 'Room',
+          targetId: room.id,
+          details: expect.stringContaining('ENDING'),
+        }) },
+      );
+      expect(result.status).toBe('ENDING');
     });
 
     it('should not let a non-owner member end the room', async () => {
@@ -220,18 +240,28 @@ describe('RoomService', () => {
         status: HttpStatus.FORBIDDEN,
         response: { code: 'ROOM_NOT_OWNER', message: '只有房主才能结束房间' },
       });
-      expect(prisma.$executeRaw).not.toHaveBeenCalled();
+      expect(prisma.room.update).not.toHaveBeenCalled();
+      expect(prisma.operationLog.create).not.toHaveBeenCalled();
     });
 
-    it('should return 409 when room is already ended', async () => {
-      const room = makeRoom({ status: 'ENDED' });
-      prisma.room.findUnique.mockResolvedValue(room);
+    it('should return 409 when room is already ENDING', async () => {
+      prisma.room.findUnique.mockResolvedValue(makeRoom({ status: 'ENDING' }));
 
-      await expect(service.endRoom(USER_ID, room.id)).rejects.toMatchObject({
+      await expect(service.endRoom(USER_ID, makeRoom().id)).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        response: { code: 'ROOM_ALREADY_ENDING' },
+      });
+      expect(prisma.room.update).not.toHaveBeenCalled();
+    });
+
+    it('should return 409 when room is already ENDED', async () => {
+      prisma.room.findUnique.mockResolvedValue(makeRoom({ status: 'ENDED' }));
+
+      await expect(service.endRoom(USER_ID, makeRoom().id)).rejects.toMatchObject({
         status: HttpStatus.CONFLICT,
         response: { code: 'ROOM_ALREADY_ENDED', message: '房间已结束' },
       });
-      expect(prisma.$executeRaw).not.toHaveBeenCalled();
+      expect(prisma.room.update).not.toHaveBeenCalled();
     });
 
     it('should return 404 when room does not exist', async () => {
@@ -241,6 +271,98 @@ describe('RoomService', () => {
         status: HttpStatus.NOT_FOUND,
         response: { code: 'ROOM_NOT_FOUND', message: '房间不存在' },
       });
+    });
+  });
+
+  describe('cancelEnd', () => {
+    it('should restore an ENDING room to ACTIVE and clear endedAt', async () => {
+      const ending = makeRoom({ status: 'ENDING', endedAt: new Date('2026-08-15T05:00:00.000Z') });
+      const active = makeRoom();
+      prisma.room.findUnique.mockResolvedValue(ending);
+      prisma.room.update.mockResolvedValue(active);
+      prisma.user.findUnique.mockResolvedValue({ username: 'owner' });
+
+      const result = await service.cancelEnd(USER_ID, ending.id);
+
+      expect(prisma.room.update).toHaveBeenCalledWith({
+        where: { id: ending.id },
+        data: { status: 'ACTIVE', endedAt: null, finalizedAt: null },
+      });
+      expect(prisma.operationLog.create).toHaveBeenCalledWith(
+        { data: expect.objectContaining({ action: 'ROOM_END_CANCEL' }) },
+      );
+      expect(result.status).toBe('ACTIVE');
+    });
+
+    it('should reject non-owner cancel with 403', async () => {
+      prisma.room.findUnique.mockResolvedValue(makeRoom({ status: 'ENDING' }));
+
+      await expect(service.cancelEnd(OTHER_ID, makeRoom().id)).rejects.toMatchObject({
+        status: HttpStatus.FORBIDDEN,
+        response: { code: 'ROOM_NOT_OWNER' },
+      });
+      expect(prisma.room.update).not.toHaveBeenCalled();
+    });
+
+    it('should reject cancel when room is not ENDING with 409', async () => {
+      prisma.room.findUnique.mockResolvedValue(makeRoom({ status: 'ACTIVE' }));
+
+      await expect(service.cancelEnd(USER_ID, makeRoom().id)).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        response: { code: 'ROOM_NOT_ENDING' },
+      });
+      expect(prisma.room.update).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when room does not exist', async () => {
+      prisma.room.findUnique.mockResolvedValue(null);
+
+      await expect(service.cancelEnd(USER_ID, 'missing')).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
+        response: { code: 'ROOM_NOT_FOUND' },
+      });
+    });
+  });
+
+  describe('finalizeIfExpired (lazy archive)', () => {
+    it('should auto-finalize an ENDING room past the cooling period on getRoomById', async () => {
+      const room = makeRoom({
+        status: 'ENDING',
+        endedAt: new Date(Date.now() - 16 * 60 * 1000),
+      });
+      const finalized = makeRoom({
+        status: 'ENDED',
+        endedAt: room.endedAt,
+        finalizedAt: new Date(),
+      });
+      prisma.roomMember.findUnique.mockResolvedValue({} as never);
+      prisma.room.findUnique.mockResolvedValue(room);
+      prisma.room.update.mockResolvedValue(finalized);
+
+      const result = await service.getRoomById(USER_ID, room.id);
+
+      expect(prisma.room.update).toHaveBeenCalledWith({
+        where: { id: room.id },
+        data: { status: 'ENDED', finalizedAt: expect.any(Date) },
+      });
+      expect(prisma.operationLog.create).toHaveBeenCalledWith(
+        { data: expect.objectContaining({ adminUserId: null, action: 'ROOM_FINALIZED' }) },
+      );
+      expect(result.status).toBe('ENDED');
+    });
+
+    it('should keep an ENDING room within the cooling period', async () => {
+      const room = makeRoom({
+        status: 'ENDING',
+        endedAt: new Date(Date.now() - 1000),
+      });
+      prisma.roomMember.findUnique.mockResolvedValue({} as never);
+      prisma.room.findUnique.mockResolvedValue(room);
+
+      const result = await service.getRoomById(USER_ID, room.id);
+
+      expect(prisma.room.update).not.toHaveBeenCalled();
+      expect(result.status).toBe('ENDING');
     });
   });
 });

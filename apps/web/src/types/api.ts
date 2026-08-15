@@ -14,7 +14,7 @@ export interface PageResult<T> {
 
 export type UserRole = "USER" | "ADMIN" | "SUPER_ADMIN";
 export type UserStatus = "ACTIVE" | "DISABLED";
-export type RoomStatus = "ACTIVE" | "ENDED";
+export type RoomStatus = "ACTIVE" | "ENDING" | "ENDED";
 export type RoomMemberRole = "OWNER" | "MEMBER";
 
 export interface User {

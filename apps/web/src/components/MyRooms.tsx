@@ -65,7 +65,7 @@ export default function MyRooms() {
   });
 
   const activeRooms = useMemo(
-    () => rooms?.filter((r) => r.status === "ACTIVE") ?? [],
+    () => rooms?.filter((r) => r.status === "ACTIVE" || r.status === "ENDING") ?? [],
     [rooms],
   );
   const historyRooms = useMemo(
@@ -160,7 +160,11 @@ export default function MyRooms() {
           <span className="room-list-name">{room.name}</span>
           {room.ownerId === userId && <Tag color="gold">房主</Tag>}
         </div>
-        <Tag color="success">进行中</Tag>
+        {room.status === "ENDING" ? (
+          <Tag color="gold">即将结束</Tag>
+        ) : (
+          <Tag color="success">进行中</Tag>
+        )}
       </div>
       <div className="room-list-meta">
         <span>
