@@ -6,6 +6,32 @@
 
 ---
 
+## Phase 16.2 — 扫码引擎重构（生命周期修复）
+
+- **状态**：已完成
+- **Bug 原因**：
+  1. **扫码重复请求商品接口（429）**：html5-qrcode 以 10fps 持续解码，条码停留在镜头前时 `onScanSuccess` 每帧触发；原回调没有任何锁，每帧都调用 `productQuery.mutate(code)` → 一次扫码发起多个 `GET /products/barcode/*` → 命中 Throttler（100 次/60s）。`stopScanner` 只在查询 `onSuccess` 后才执行，且请求已在途，无法取消。
+  2. **出现两个摄像头画面**：React 18 StrictMode（`main.tsx`）开发模式下 effect「挂载→卸载→再挂载」。原代码 `scannerRef.current = qr` 在 `await qr.start()` **之后**才赋值，卸载清理时 `scannerRef` 还是 `null` → cleanup 空转；第二次挂载再次 `new Html5Qrcode()` → 两个实例挂在同一 `#drink-scanner` 容器 → 两个 `<video>`、两个 getUserMedia 流、两个解码回调。
+  3. **stop() 同步抛错**：html5-qrcode 2.x 的 `stop()` 在未启动时**同步 throw**（非 Promise reject），原 `scanner.stop().catch(...)` 无法捕获 → 卸载时产生 uncaught error。
+- **修复方案**：
+  1. **单实例 + 同步注册**：`scannerRef.current = qr` 在 `new Html5Qrcode()` 创建后**立即**赋值（先于 `start()`），配合 `initializingRef` 防止 StrictMode 重复初始化；`startScanner` 首行守卫 `scannerRef.current || initializingRef.current` 直接返回。
+  2. **扫码锁**：`scanLockRef`（useRef 非 useState）在第一次成功解码时置 true，后续回调直接 return；流程为「加锁 → 停摄像头（destroyScanner）→ 只请求一次商品接口」，禁止先请求再 stop。
+  3. **Barcode 防重**：`lastBarcodeRef` + `lastScanTimeRef`，同一 barcode 3 秒内禁止重复查询（扫码回调与手动输入共用）。
+  4. **统一销毁 `destroyScanner()`**：stop + clear + `scannerRef=null` + `initializingRef=false` + `scanLockRef=false`，`stop()` 用 try/catch 包裹（兼容同步抛错），幂等可重复调用；组件卸载 cleanup 调用它，离开页面即释放摄像头。
+  5. **异步续调用令牌校验**：`start()`/`getCameras()` 等 await 之后校验 `scannerRef.current !== qr`，若已被销毁/替换则立即 stop+clear 并放弃，避免竞态残留 video/stream。
+  6. **状态解耦**：扫码状态（starting/scanning/querying/success/not-found/network-error/camera-denied）不再依赖 `scanning` 布尔值，摄像头停止后仍能展示「识别成功/未找到/网络异常」；新增 idle 态「打开摄像头扫码」按钮；查询失败后复位扫码锁并自动重启摄像头继续扫描。
+- **影响范围**：`apps/web/src/pages/DrinkRecord.tsx`
+- **API / 数据库变化**：无（未改后端、未改数据库、未放宽 Throttler、保留 StrictMode）
+- **Git commit**：`fix: refactor scanner lifecycle and prevent duplicate barcode requests`
+- **测试结果**：`pnpm typecheck` ✅、`pnpm build` ✅、`pnpm --filter @jiuju/web typecheck/build` ✅；浏览器实测（开发环境 StrictMode）：
+  - 进入扫码页无 uncaught error（原 `Cannot stop, scanner is not running` 已消除）；
+  - 摄像头权限拒绝场景正确显示中文错误（权限不足），可进入 idle 并重试；
+  - 手动条码查询正常；同一 barcode 3 秒内重复查询被拦截（仅 1 次请求），不同 barcode 正常放行；
+  - 进出页面多次不叠加实例、无残留报错；
+  - 摄像头实拍/双摄像头验证与 iPhone Safari / Android Chrome 真机测试待上线前人工复核（本环境无摄像头）。
+
+---
+
 ## Phase 16 Bug Fix — 扫码登记流程修复 + 测试数据清理
 
 - **状态**：已完成

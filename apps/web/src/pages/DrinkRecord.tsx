@@ -19,6 +19,7 @@ import {
   ReloadOutlined,
   CheckCircleFilled,
   CloseCircleFilled,
+  CameraOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
@@ -29,17 +30,32 @@ import type { Product } from "../types/api";
 
 const SCANNER_ID = "drink-scanner";
 
+/**
+ * 扫码生命周期状态
+ * - idle：摄像头已关闭，等待用户打开
+ * - starting：正在启动摄像头
+ * - scanning：扫描中
+ * - querying：已识别条码，正在查询商品
+ * - success：识别成功
+ * - not-found：商品不存在
+ * - network-error：网络异常
+ * - camera-denied：摄像头不可用 / 权限不足 / 浏览器不支持
+ */
 type ScanStatus =
   | "idle"
   | "starting"
   | "scanning"
+  | "querying"
   | "success"
   | "not-found"
-  | "camera-denied"
-  | "network-error";
+  | "network-error"
+  | "camera-denied";
 
 type QueryState =
   "idle" | "loading" | "success" | "not-found" | "network-error";
+
+/** 同一 barcode 禁止重复查询的时间窗口（毫秒） */
+const DEDUP_WINDOW_MS = 3000;
 
 export default function DrinkRecord() {
   const { id = "" } = useParams();
@@ -47,8 +63,14 @@ export default function DrinkRecord() {
   const userId = useAuthStore((state) => state.user?.id);
   const queryClient = useQueryClient();
 
+  // ===== 扫码实例与锁：全部用 ref，避免渲染重建 / 回调竞态 =====
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const [scanning, setScanning] = useState(false);
+  const initializingRef = useRef(false); // 启动中，防止 StrictMode 重复初始化
+  const scanLockRef = useRef(false); // 扫码锁：一次识别只触发一次查询
+  const lastBarcodeRef = useRef(""); // 最近一次查询的条码
+  const lastScanTimeRef = useRef(0); // 最近一次查询时间
+  const startScannerRef = useRef<() => void>(() => {});
+
   const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [barcode, setBarcode] = useState<string>("");
@@ -57,24 +79,60 @@ export default function DrinkRecord() {
   const [quantity, setQuantity] = useState<number>(1);
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * 统一销毁：stop + clear + 释放引用 + 复位锁（幂等，可重复调用）。
+   * 在 StrictMode 卸载时也会被调用，确保摄像头/页面退出即释放。
+   */
+  const destroyScanner = useCallback(() => {
+    if (successTimer.current) {
+      clearTimeout(successTimer.current);
+      successTimer.current = null;
+    }
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
+    initializingRef.current = false;
+    scanLockRef.current = false;
+    if (scanner) {
+      try {
+        // 注意：stop() 在未启动时可能同步抛错，需 try/catch 包裹
+        scanner
+          .stop()
+          .catch(() => undefined)
+          .then(() => {
+            try {
+              scanner.clear();
+            } catch {
+              // 实例可能已停止/已被释放，忽略
+            }
+          });
+      } catch {
+        // 未启动即被销毁：直接清理 DOM，避免残留 video
+        try {
+          scanner.clear();
+        } catch {
+          // 忽略
+        }
+      }
+    }
+  }, []);
+
   const productQuery = useMutation({
     mutationFn: (code: string) => productsApi.findByBarcode(code),
     onMutate: () => {
       setQueryState("loading");
       setProduct(null);
+      setScanStatus("querying");
     },
     onSuccess: (p) => {
       setProduct(p);
       setQueryState("success");
       setScanStatus("success");
-      stopScanner();
       if (successTimer.current) clearTimeout(successTimer.current);
       successTimer.current = setTimeout(() => setScanStatus("idle"), 900);
     },
     onError: (error) => {
       setProduct(null);
-      setQueryState("network-error");
-      // 区分 404（未找到）与网络/服务器错误
+      // 区分 404（商品不存在）与网络/服务器错误
       const axiosError = error as { response?: { status?: number } };
       if (axiosError.response?.status === 404) {
         setQueryState("not-found");
@@ -83,15 +141,12 @@ export default function DrinkRecord() {
         setQueryState("network-error");
         setScanStatus("network-error");
       }
-      // 稍后恢复扫描状态
+      // 稍后复位扫码锁并重新启动摄像头继续扫描
       if (successTimer.current) clearTimeout(successTimer.current);
       successTimer.current = setTimeout(() => {
-        setScanStatus((prev) =>
-          prev === "not-found" || prev === "network-error" ? "scanning" : prev,
-        );
-        setQueryState((prev) =>
-          prev === "not-found" || prev === "network-error" ? "idle" : prev,
-        );
+        setQueryState("idle");
+        setScanStatus("idle");
+        startScannerRef.current();
       }, 1800);
     },
   });
@@ -110,25 +165,49 @@ export default function DrinkRecord() {
     },
   });
 
-  /** 停止并释放摄像头（幂等） */
-  const stopScanner = useCallback(async () => {
-    if (successTimer.current) clearTimeout(successTimer.current);
-    if (scannerRef.current) {
-      try {
-        await scannerRef.current.stop();
-        scannerRef.current.clear();
-      } catch {
-        // 忽略停止异常
+  /**
+   * 扫码成功回调：
+   * 加锁 → 停止摄像头（清理 camera）→ 只请求一次商品接口。
+   */
+  const handleScanSuccess = useCallback(
+    async (decodedText: string) => {
+      const code = decodedText.trim();
+      if (!/^\d{8,14}$/.test(code)) return;
+
+      // 扫码锁：识别一次后忽略 html5-qrcode 的后续重复回调
+      if (scanLockRef.current) return;
+
+      // 同一 barcode 3 秒内禁止重复查询
+      const now = Date.now();
+      if (
+        code === lastBarcodeRef.current &&
+        now - lastScanTimeRef.current < DEDUP_WINDOW_MS
+      ) {
+        return;
       }
-      scannerRef.current = null;
-    }
-    setScanning(false);
-  }, []);
+
+      scanLockRef.current = true;
+      lastBarcodeRef.current = code;
+      lastScanTimeRef.current = now;
+      setBarcode(code);
+      setScanStatus("querying");
+
+      // 先停摄像头再查询，避免持续触发回调导致重复请求
+      destroyScanner();
+      productQuery.mutate(code);
+    },
+    [destroyScanner, productQuery],
+  );
 
   const startScanner = useCallback(async () => {
-    if (scannerRef.current || scanning) return; // 避免重复初始化
+    // 单实例：已有实例或正在初始化时禁止重复创建
+    if (scannerRef.current || initializingRef.current) return;
+    if (scanLockRef.current) return;
+
+    initializingRef.current = true;
     setScanStatus("starting");
     setCameraError(null);
+    setQueryState("idle");
 
     const qr = new Html5Qrcode(SCANNER_ID, {
       verbose: false,
@@ -141,6 +220,8 @@ export default function DrinkRecord() {
         Html5QrcodeSupportedFormats.QR_CODE,
       ],
     });
+    // 立即注册实例（先于 start()），保证 StrictMode 的 cleanup 能正确释放
+    scannerRef.current = qr;
 
     try {
       // 优先选择后置摄像头，回退到 facingMode
@@ -157,52 +238,88 @@ export default function DrinkRecord() {
         deviceId = undefined;
       }
 
+      // 启动期间已被销毁/替换，放弃本次实例
+      if (scannerRef.current !== qr) return;
+
       await qr.start(
         deviceId ? { deviceId } : { facingMode: "environment" },
         { fps: 10 },
-        (decodedText) => {
-          const code = decodedText.trim();
-          if (!/^\d{8,14}$/.test(code)) return;
-          setBarcode(code);
-          productQuery.mutate(code);
-        },
+        handleScanSuccess,
         () => {
           // 忽略单帧解码失败回调
         },
       );
 
-      scannerRef.current = qr;
-      setScanning(true);
+      if (scannerRef.current !== qr) {
+        // start 期间被销毁：立即停止并清理，避免残留 video/stream
+        try {
+          qr.stop()
+            .catch(() => undefined)
+            .then(() => {
+              try {
+                qr.clear();
+              } catch {
+                // 忽略
+              }
+            });
+        } catch {
+          try {
+            qr.clear();
+          } catch {
+            // 忽略
+          }
+        }
+        return;
+      }
+
+      initializingRef.current = false;
       setScanStatus("scanning");
     } catch (err) {
-      setScanning(false);
+      if (scannerRef.current !== qr) return; // 已被替换，不处理
+      scannerRef.current = null;
+      initializingRef.current = false;
       setCameraError(mapCameraError(err));
       setScanStatus("camera-denied");
       try {
-        await qr.clear();
+        qr.clear();
       } catch {
         // 忽略
       }
-      scannerRef.current = null;
     }
-  }, [productQuery, scanning]);
+  }, [destroyScanner, handleScanSuccess]);
 
+  // 始终持有最新的 startScanner，供异步错误恢复调用
   useEffect(() => {
-    // 进入页面自动请求后置摄像头
-    startScanner();
+    startScannerRef.current = startScanner;
+  }, [startScanner]);
+
+  // 进入页面自动启动摄像头；卸载时立即释放摄像头
+  useEffect(() => {
+    void startScanner();
     return () => {
-      if (successTimer.current) clearTimeout(successTimer.current);
-      void stopScanner();
+      destroyScanner();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleBarcodeSubmit = () => {
-    if (!/^\d{8,14}$/.test(barcode.trim())) {
+    const code = barcode.trim();
+    if (!/^\d{8,14}$/.test(code)) {
       message.error("请输入 8-14 位数字条码");
       return;
     }
-    productQuery.mutate(barcode.trim());
+    // 手动输入同样遵循 3 秒防重规则
+    const now = Date.now();
+    if (
+      code === lastBarcodeRef.current &&
+      now - lastScanTimeRef.current < DEDUP_WINDOW_MS
+    ) {
+      message.warning("该条码刚查询过，请稍后再试");
+      return;
+    }
+    lastBarcodeRef.current = code;
+    lastScanTimeRef.current = now;
+    productQuery.mutate(code);
   };
 
   const canSubmit = !!product && !!userId && !createMutation.isPending;
@@ -224,6 +341,13 @@ export default function DrinkRecord() {
       />
     ) : null;
 
+  const showScanStatus =
+    scanStatus === "scanning" ||
+    scanStatus === "querying" ||
+    scanStatus === "success" ||
+    scanStatus === "not-found" ||
+    scanStatus === "network-error";
+
   return (
     <div className="drink-record-page">
       <Button
@@ -243,13 +367,11 @@ export default function DrinkRecord() {
       <div className="scanner-shell">
         <div className="scanner-frame">
           {/* 摄像头初始化前展示加载状态 */}
-          {!scanning && scanStatus !== "camera-denied" && (
+          {scanStatus === "starting" && (
             <div className="scanner-placeholder">
               <Spin size="large" />
               <Typography.Text style={{ color: "#fff", marginTop: 8 }}>
-                {scanStatus === "starting"
-                  ? "正在启动摄像头..."
-                  : "正在准备摄像头..."}
+                正在启动摄像头...
               </Typography.Text>
             </div>
           )}
@@ -263,8 +385,8 @@ export default function DrinkRecord() {
             <div className="scan-line" />
           </div>
 
-          {/* 扫码状态提示 */}
-          {scanning && (
+          {/* 扫码状态提示（与 scanning 解耦，摄像头停止后仍可显示） */}
+          {showScanStatus && (
             <div className="scan-status">
               {scanStatus === "success" && (
                 <span className="scan-status-success">
@@ -278,10 +400,15 @@ export default function DrinkRecord() {
               )}
               {scanStatus === "network-error" && (
                 <span className="scan-status-error">
-                  网络连接失败，请检查网络
+                  网络异常，请检查网络
                 </span>
               )}
-              {scanStatus === "scanning" && <span>正在扫描酒瓶条码...</span>}
+              {scanStatus === "querying" && (
+                <span>正在查询商品...</span>
+              )}
+              {scanStatus === "scanning" && (
+                <span>正在扫描酒瓶条码...</span>
+              )}
             </div>
           )}
         </div>
@@ -299,7 +426,7 @@ export default function DrinkRecord() {
               <Button
                 size="small"
                 type="primary"
-                onClick={() => startScanner()}
+                onClick={() => void startScanner()}
               >
                 重试
               </Button>
@@ -307,15 +434,31 @@ export default function DrinkRecord() {
           </div>
         )}
 
-        {scanning && (
+        {scanStatus === "scanning" && (
           <Button
             type="text"
             icon={<ReloadOutlined />}
-            onClick={() => stopScanner()}
+            onClick={() => {
+              destroyScanner();
+              setScanStatus("idle");
+              setQueryState("idle");
+            }}
             size="small"
             style={{ display: "block", margin: "0 auto 12px" }}
           >
             关闭摄像头
+          </Button>
+        )}
+
+        {scanStatus === "idle" && !product && (
+          <Button
+            block
+            type="primary"
+            icon={<CameraOutlined />}
+            onClick={() => void startScanner()}
+            style={{ marginTop: 12 }}
+          >
+            打开摄像头扫码
           </Button>
         )}
 
@@ -344,7 +487,7 @@ export default function DrinkRecord() {
           </Form.Item>
         </Form>
 
-        {queryState === "loading" && (
+        {queryState === "loading" && scanStatus !== "querying" && (
           <div style={{ textAlign: "center", padding: 16 }}>
             <Spin tip="查询商品中..." />
           </div>
@@ -449,7 +592,7 @@ function mapCameraError(err: unknown): string {
     lower.includes("permission") ||
     lower.includes("denied")
   ) {
-    return "摄像头权限被拒绝，请在浏览器设置中允许摄像头权限";
+    return "摄像头权限不足，请在浏览器设置中允许摄像头权限";
   }
   if (lower.includes("not secure") || lower.includes("https")) {
     return "摄像头需要 HTTPS 或 localhost 环境，请通过 HTTPS 访问";
