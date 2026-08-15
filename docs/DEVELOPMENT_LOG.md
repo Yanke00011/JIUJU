@@ -6,6 +6,19 @@
 
 ---
 
+## Phase 17.3.2 — README 重写（GitHub 规范 + 使用教程）
+
+- **状态**：已完成
+- **改动内容**：重写根目录 `README.md`，从面向开发者的长文档改为符合 GitHub 规范的**产品 README**：
+  - 顶部：项目名 + 徽章（TypeScript / NestJS / React / PostgreSQL / Prisma / Docker / pnpm）
+  - 新增「使用教程」章节：以「老张生日局」为场景，逐步演示注册登录、创建酒局、邀请加入、扫码登记、选择已有酒品、查看排行、结束酒局、管理后台操作
+  - 保留并精简：快速开始（后端/前端/手机局域网测试）、环境变量、常用脚本、项目结构、技术栈、API 文档、测试、Docker 生产部署、备份、Roadmap
+  - 链接到 `docs/DEVELOPMENT_LOG.md`、`docs/UI_DESIGN_SYSTEM.md`、`PROJECT_SPEC.md`、`AGENT_INSTRUCTIONS.md`
+- **API / 数据库变化**：无
+- **Git commit**：`docs: rewrite readme with usage tutorial`
+
+---
+
 ## Phase 17.3.1 — 我的酒局列表体验优化
 
 - **状态**：已完成
