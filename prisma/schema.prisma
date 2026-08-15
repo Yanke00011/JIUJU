@@ -152,20 +152,21 @@ model Product {
 // ============================================================
 
 model DrinkRecord {
-  id              String    @id @default(uuid()) @db.Uuid
-  roomId          String    @db.Uuid
-  productId       String    @db.Uuid
-  userId          String    @db.Uuid // 实际饮用者
-  createdBy       String    @db.Uuid // 实际登记操作者，禁止信任前端传入
-  barcode         String    @db.VarChar(32) // 快照，允许重复
-  volumeMl        Int
-  quantity        Int       @default(1) // V1 固定为 1
-  clientRequestId String    @db.Uuid // 幂等键，客户端生成
-  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
-  deletedAt       DateTime? @db.Timestamptz(3) // 软删除
-  deletedBy       String?   @db.Uuid
-  deleteReason    String?   @db.VarChar(500)
+  id                    String    @id @default(uuid()) @db.Uuid
+  roomId                String    @db.Uuid
+  productId             String    @db.Uuid
+  userId                String    @db.Uuid // 实际饮用者
+  createdBy             String    @db.Uuid // 实际登记操作者，禁止信任前端传入
+  barcode               String    @db.VarChar(32) // 快照，允许重复
+  volumeMlSnapshot      Int // 创建时商品容量快照，防止商品修改影响历史
+  alcoholPercentSnapshot Decimal? @db.Decimal(4, 2) // 创建时酒精度快照
+  quantity              Decimal   @default(1) @db.Decimal(6, 2) // 数量，支持小数（如 0.5）
+  clientRequestId       String    @db.Uuid // 幂等键，客户端生成
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt             DateTime? @db.Timestamptz(3) // 软删除
+  deletedBy             String?   @db.Uuid
+  deleteReason          String?   @db.VarChar(500)
 
   room          Room     @relation(fields: [roomId], references: [id], onDelete: Restrict)
   product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)

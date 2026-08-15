@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
+import { DrinkRecordsModule } from './drink-records/drink-records.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
@@ -31,6 +32,7 @@ import { UserModule } from './users/users.module';
     RoomModule,
     RoomMembersModule,
     ProductsModule,
+    DrinkRecordsModule,
   ],
   providers: [
     {

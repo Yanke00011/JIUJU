@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1-7 已完成）
+## 当前进度（Phase 1-8 已完成）
 
-当前阶段为 **Backend First · Phase 1-7：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码**，已完成：
+当前阶段为 **Backend First · Phase 1-8：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码 + 饮酒记录**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -51,8 +51,15 @@
 - 修改商品：仅允许 name/brand/category/volumeMl/alcoholPercent；不允许修改 id 与 barcode
 - Product 是全局商品数据，登录用户即可查询/创建/修改；V1 禁止删除（未来会被 DrinkRecord 引用）
 - Products 单元测试与 E2E 测试（barcode 查询/trim/格式/长度、重复与并发创建、修改、非法 category/volumeMl/alcoholPercent、不可删等）
+- Drink Records：创建 / 列表 / 详情 / 修改 / 软删除（`POST /api/v1/rooms/:id/drinks`、`GET /api/v1/rooms/:id/drinks`、`GET /api/v1/rooms/:id/drinks/:drinkId`、`PATCH /api/v1/rooms/:id/drinks/:drinkId`、`DELETE /api/v1/rooms/:id/drinks/:drinkId`）
+- 创建记录：`roomId` 来自 URL、`createdBy` 来自 JWT；普通成员只能登记自己（否则 403 `CANNOT_REGISTER_OTHERS`），OWNER 可登记房间成员（非成员 400 `TARGET_NOT_ROOM_MEMBER`）
+- 记录保存商品快照（`barcode` / `volumeMlSnapshot` / `alcoholPercentSnapshot`），防止商品后续修改影响历史
+- `quantity` 支持小数（0.01-100，最多 2 位小数）；`productId` 不存在 404 `PRODUCT_NOT_FOUND`；非成员 404 `ROOM_NOT_FOUND`；已结束房间禁止写操作 409 `ROOM_ENDED`
+- 修改仅允许 `quantity` / `userId`（不允许 roomId/productId）；普通成员只能改自己的记录（否则 403 `DRINK_NOT_OWNER`）
+- 删除为软删除（设置 `deletedAt` / `deletedBy`），不删除数据库记录；列表与详情默认排除已软删除记录
+- Drink Records 单元测试与 E2E 测试（成员登记自己/OWNER 登记别人/非成员/product 不存在/quantity 小数与非法/snapshot 保存/列表隔离/修改权限/软删除/删除后列表隐藏等）
 
-尚未实现（属于后续 Phase）：饮酒记录、统计、Admin API、用户 Web、Admin Web、微信小程序。
+尚未实现（属于后续 Phase）：统计、Admin API、用户 Web、Admin Web、微信小程序。
 
 ## 核心功能
 
@@ -357,8 +364,13 @@ pnpm prisma db seed                               # 写入种子数据
   - `POST /api/v1/products`：创建商品。`barcode` 唯一（重复/并发返回 409 `PRODUCT_ALREADY_EXISTS`）；`name` 1-100、`brand` 0-100、`category` 为 `ProductCategory` 枚举、`volumeMl` 1-10000、`alcoholPercent` 0-100。
   - `PATCH /api/v1/products/:id`：修改商品，仅允许 `name/brand/category/volumeMl/alcoholPercent`；不允许修改 `id` 与 `barcode`（barcode 是商品核心身份，V1 不可改）。
   - Product 是全局商品数据，登录用户即可查询/创建/修改；V1 禁止删除（`DELETE /api/v1/products/:id` 不存在），因为未来会被 DrinkRecord 引用，删除会破坏历史记录。
-- `Products`：如 `GET /api/v1/products/barcode/:barcode`；找不到时返回 `PRODUCT_NOT_FOUND`。
-- `Drinks`：`POST /api/v1/rooms/:roomId/drinks`。创建前依次校验 JWT、登记人房间成员身份、房间为 `ACTIVE`、酒品存在、实际饮用者属于房间、幂等键，然后创建或返回原记录。
+- `Drinks`（饮酒记录，全部需要 JWT）：
+  - `POST /api/v1/rooms/:roomId/drinks`：创建饮酒记录。`roomId` 来自 URL，`createdBy` 来自 JWT；普通成员只能登记自己（403 `CANNOT_REGISTER_OTHERS`），OWNER 可登记房间成员（非成员 400 `TARGET_NOT_ROOM_MEMBER`）；`productId` 不存在 404 `PRODUCT_NOT_FOUND`；房间不存在/非成员 404 `ROOM_NOT_FOUND`；已结束房间 409 `ROOM_ENDED`。
+  - `GET /api/v1/rooms/:roomId/drinks`：房间饮酒记录列表（仅成员，非成员 404），默认排除已软删除记录。
+  - `GET /api/v1/rooms/:roomId/drinks/:drinkId`：记录详情（不存在 404 `DRINK_RECORD_NOT_FOUND`）。
+  - `PATCH /api/v1/rooms/:roomId/drinks/:drinkId`：仅允许修改 `quantity` / `userId`；普通成员只能改自己的记录（403 `DRINK_NOT_OWNER`）。
+  - `DELETE /api/v1/rooms/:roomId/drinks/:drinkId`：软删除（设置 `deletedAt` / `deletedBy`），不删除数据库记录。
+  - 创建时保存商品快照（`barcode` / `volumeMlSnapshot` / `alcoholPercentSnapshot`），防止商品修改影响历史；`quantity` 支持小数（0.01-100，最多 2 位小数）。
 - `Stats`：房间汇总、成员排行、酒品排行与历史记录。
 - `Admin`：全部位于 `/api/v1/admin/*`，与普通用户接口隔离。
 
