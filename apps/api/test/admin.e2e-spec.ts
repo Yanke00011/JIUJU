@@ -17,6 +17,7 @@ describe('Admin (e2e)', () => {
   const password = 'Password123';
 
   let adminToken: string;
+  let superAdminToken: string;
   let userToken: string;
   let targetUserId: string;
 
@@ -30,8 +31,8 @@ describe('Admin (e2e)', () => {
     await app.init();
 
     prisma = app.get(PrismaService);
-    await prisma.operationLog.deleteMany({
-      where: { admin: { username: { startsWith: 'e2e_admin' } } },
+    await prisma.drinkRecord.deleteMany({
+      where: { room: { owner: { username: { startsWith: 'e2e_admin' } } } },
     });
     await prisma.roomMember.deleteMany({
       where: { user: { username: { startsWith: 'e2e_admin' } } },
@@ -39,8 +40,22 @@ describe('Admin (e2e)', () => {
     await prisma.room.deleteMany({
       where: { owner: { username: { startsWith: 'e2e_admin' } } },
     });
+    await prisma.product.deleteMany({
+      where: {
+        OR: [
+          { name: '后台啤酒' },
+          { name: '软删啤酒' },
+          { name: '待删除啤酒' },
+          { name: '引用中啤酒' },
+          { name: '恢复啤酒' },
+        ],
+      },
+    });
     await prisma.user.deleteMany({
       where: { username: { startsWith: 'e2e_admin' } },
+    });
+    await prisma.operationLog.deleteMany({
+      where: { admin: { username: { startsWith: 'e2e_admin' } } },
     });
 
     const passwordHash = await hash(password, ARGON2_OPTIONS);
@@ -63,12 +78,13 @@ describe('Admin (e2e)', () => {
       return res.body.data.accessToken as string;
     };
     adminToken = await login(adminName);
+    superAdminToken = await login(superAdminName);
     userToken = await login(userName);
   });
 
   afterAll(async () => {
-    await prisma.operationLog.deleteMany({
-      where: { admin: { username: { startsWith: 'e2e_admin' } } },
+    await prisma.drinkRecord.deleteMany({
+      where: { room: { owner: { username: { startsWith: 'e2e_admin' } } } },
     });
     await prisma.roomMember.deleteMany({
       where: { user: { username: { startsWith: 'e2e_admin' } } },
@@ -76,8 +92,22 @@ describe('Admin (e2e)', () => {
     await prisma.room.deleteMany({
       where: { owner: { username: { startsWith: 'e2e_admin' } } },
     });
+    await prisma.product.deleteMany({
+      where: {
+        OR: [
+          { name: '后台啤酒' },
+          { name: '软删啤酒' },
+          { name: '待删除啤酒' },
+          { name: '引用中啤酒' },
+          { name: '恢复啤酒' },
+        ],
+      },
+    });
     await prisma.user.deleteMany({
       where: { username: { startsWith: 'e2e_admin' } },
+    });
+    await prisma.operationLog.deleteMany({
+      where: { admin: { username: { startsWith: 'e2e_admin' } } },
     });
     await app.close();
   });
@@ -282,6 +312,321 @@ describe('Admin (e2e)', () => {
         .expect(400);
 
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  describe('Admin search', () => {
+    it('should search users by keyword', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/admin/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .query({ keyword: userName })
+        .expect(200);
+
+      expect(res.body.data.items.length).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.items[0].username).toBe(userName);
+    });
+
+    it('should search rooms by keyword', async () => {
+      const adminUser = await prisma.user.findUniqueOrThrow({ where: { username: adminName } });
+      const room = await prisma.room.create({
+        data: { name: '搜索测试房间', ownerId: adminUser.id, inviteCode: 'SRCH01' },
+      });
+      await prisma.roomMember.create({
+        data: { roomId: room.id, userId: adminUser.id, role: 'OWNER' },
+      });
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/admin/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .query({ keyword: '搜索测试' })
+        .expect(200);
+
+      expect(res.body.data.items.some((r: { name: string }) => r.name === '搜索测试房间')).toBe(true);
+
+      await prisma.roomMember.deleteMany({ where: { roomId: room.id } });
+      await prisma.room.deleteMany({ where: { id: room.id } });
+    });
+
+    it('should search products by keyword', async () => {
+      const adminUser = await prisma.user.findUniqueOrThrow({ where: { username: adminName } });
+      const prod = await prisma.product.create({
+        data: {
+          barcode: `64${String(Date.now()).slice(-10)}`,
+          name: '搜索专用啤酒',
+          category: 'BEER',
+          volumeMl: 500,
+        },
+      });
+      void adminUser;
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/admin/products')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .query({ keyword: '搜索专用' })
+        .expect(200);
+
+      expect(res.body.data.items.some((p: { name: string }) => p.name === '搜索专用啤酒')).toBe(true);
+
+      await prisma.product.deleteMany({ where: { id: prod.id } });
+    });
+  });
+
+  describe('Admin user delete', () => {
+    it('should reject ADMIN deleting a user (403)', async () => {
+      const victim = await prisma.user.create({
+        data: {
+          username: `e2e_admin_victim_${Date.now()}`,
+          nickname: '受害者',
+          passwordHash: await hash(password, ARGON2_OPTIONS),
+        },
+      });
+      const res = await request(app.getHttpServer())
+        .delete(`/api/v1/admin/users/${victim.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(403);
+      expect(res.body.error.code).toBe('SUPER_ADMIN_REQUIRED');
+    });
+
+    it('should let SUPER_ADMIN physically delete a user without history', async () => {
+      const victim = await prisma.user.create({
+        data: {
+          username: `e2e_admin_victim2_${Date.now()}`,
+          nickname: '受害者2',
+          passwordHash: await hash(password, ARGON2_OPTIONS),
+        },
+      });
+      const res = await request(app.getHttpServer())
+        .delete(`/api/v1/admin/users/${victim.id}`)
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .expect(200);
+
+      expect(res.body.data).toEqual({ deleted: true, softDeleted: false });
+      const gone = await prisma.user.findUnique({ where: { id: victim.id } });
+      expect(gone).toBeNull();
+    });
+
+    it('should soft delete a user with drink history', async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { username: adminName } });
+      const room = await prisma.room.findFirstOrThrow({ where: { ownerId: owner.id } });
+      const victim = await prisma.user.create({
+        data: {
+          username: `e2e_admin_victim3_${Date.now()}`,
+          nickname: '受害者3',
+          passwordHash: await hash(password, ARGON2_OPTIONS),
+        },
+      });
+      await prisma.roomMember.create({
+        data: { roomId: room.id, userId: victim.id, role: 'MEMBER' },
+      });
+      const product = await prisma.product.create({
+        data: {
+          barcode: `63${String(Date.now()).slice(-10)}`,
+          name: '软删啤酒',
+          category: 'BEER',
+          volumeMl: 500,
+        },
+      });
+      await prisma.drinkRecord.create({
+        data: {
+          roomId: room.id,
+          productId: product.id,
+          userId: victim.id,
+          createdBy: owner.id,
+          barcode: product.barcode,
+          volumeMlSnapshot: 500,
+          quantity: 1,
+          clientRequestId: `00000000-0000-4000-8000-${String(Date.now()).slice(-12)}`,
+        },
+      });
+
+      const res = await request(app.getHttpServer())
+        .delete(`/api/v1/admin/users/${victim.id}`)
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .expect(200);
+
+      expect(res.body.data).toEqual({ deleted: false, softDeleted: true });
+      const kept = await prisma.user.findUnique({ where: { id: victim.id } });
+      expect(kept).not.toBeNull();
+      expect(kept!.deletedAt).not.toBeNull();
+      expect(kept!.status).toBe('DISABLED');
+    });
+
+    it('should reject deleting self', async () => {
+      const superUser = await prisma.user.findUniqueOrThrow({ where: { username: superAdminName } });
+      const res = await request(app.getHttpServer())
+        .delete(`/api/v1/admin/users/${superUser.id}`)
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .expect(403);
+      expect(res.body.error.code).toBe('CANNOT_DELETE_SELF');
+    });
+
+    it('should reject deleting a SUPER_ADMIN', async () => {
+      const otherSuper = await prisma.user.create({
+        data: {
+          username: `e2e_admin_othersuper_${Date.now()}`,
+          nickname: '其他超管',
+          passwordHash: await hash(password, ARGON2_OPTIONS),
+          role: 'SUPER_ADMIN',
+        },
+      });
+      const res = await request(app.getHttpServer())
+        .delete(`/api/v1/admin/users/${otherSuper.id}`)
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .expect(403);
+      expect(res.body.error.code).toBe('CANNOT_DELETE_SUPER_ADMIN');
+
+      await prisma.user.deleteMany({ where: { id: otherSuper.id } });
+    });
+  });
+
+  describe('Admin product delete', () => {
+    it('should let SUPER_ADMIN delete a product with no references', async () => {
+      const product = await prisma.product.create({
+        data: {
+          barcode: `62${String(Date.now()).slice(-10)}`,
+          name: '待删除啤酒',
+          category: 'BEER',
+          volumeMl: 500,
+        },
+      });
+      await request(app.getHttpServer())
+        .delete(`/api/v1/admin/products/${product.id}`)
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .expect(200);
+
+      const gone = await prisma.product.findUnique({ where: { id: product.id } });
+      expect(gone).toBeNull();
+    });
+
+    it('should reject deleting a product in use', async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { username: adminName } });
+      const room = await prisma.room.findFirstOrThrow({ where: { ownerId: owner.id } });
+      const product = await prisma.product.create({
+        data: {
+          barcode: `61${String(Date.now()).slice(-10)}`,
+          name: '引用中啤酒',
+          category: 'BEER',
+          volumeMl: 500,
+        },
+      });
+      await prisma.drinkRecord.create({
+        data: {
+          roomId: room.id,
+          productId: product.id,
+          userId: owner.id,
+          createdBy: owner.id,
+          barcode: product.barcode,
+          volumeMlSnapshot: 500,
+          quantity: 1,
+          clientRequestId: `00000000-0000-4000-8001-${String(Date.now()).slice(-12)}`,
+        },
+      });
+
+      const res = await request(app.getHttpServer())
+        .delete(`/api/v1/admin/products/${product.id}`)
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .expect(409);
+
+      expect(res.body.error.code).toBe('PRODUCT_IN_USE');
+      const still = await prisma.product.findUnique({ where: { id: product.id } });
+      expect(still).not.toBeNull();
+    });
+  });
+
+  describe('Admin room end & drinks', () => {
+    it('should end a room', async () => {
+      const adminUser = await prisma.user.findUniqueOrThrow({ where: { username: adminName } });
+      const room = await prisma.room.create({
+        data: { name: '结束测试房间', ownerId: adminUser.id, inviteCode: 'ENDT01' },
+      });
+      await prisma.roomMember.create({
+        data: { roomId: room.id, userId: adminUser.id, role: 'OWNER' },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/admin/rooms/${room.id}/end`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(res.body.data.room.status).toBe('ENDED');
+    });
+
+    it('should export room drinks as CSV', async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { username: adminName } });
+      const room = await prisma.room.findFirstOrThrow({ where: { ownerId: owner.id } });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/rooms/${room.id}/export`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(res.headers['content-type']).toContain('text/csv');
+      expect(res.text).toContain('用户');
+      expect(res.text).toContain('酒品');
+    });
+
+    it('should restore a soft-deleted drink record', async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { username: adminName } });
+      const room = await prisma.room.findFirstOrThrow({ where: { ownerId: owner.id } });
+      const product = await prisma.product.create({
+        data: {
+          barcode: `60${String(Date.now()).slice(-10)}`,
+          name: '恢复啤酒',
+          category: 'BEER',
+          volumeMl: 500,
+        },
+      });
+      const drink = await prisma.drinkRecord.create({
+        data: {
+          roomId: room.id,
+          productId: product.id,
+          userId: owner.id,
+          createdBy: owner.id,
+          barcode: product.barcode,
+          volumeMlSnapshot: 500,
+          quantity: 1,
+          deletedAt: new Date(),
+          deletedBy: owner.id,
+          clientRequestId: `00000000-0000-4000-8002-${String(Date.now()).slice(-12)}`,
+        },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/admin/drinks/${drink.id}/restore`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(res.body.data.record.deletedAt).toBeNull();
+    });
+
+    it('should list admin drinks including deleted', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/admin/drinks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .query({ page: 1, pageSize: 20 })
+        .expect(200);
+
+      expect(res.body.data.total).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(res.body.data.items)).toBe(true);
+    });
+  });
+
+  describe('Admin dashboard', () => {
+    it('should return stats and recent lists', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/admin/dashboard')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(res.body.data.stats).toHaveProperty('totalUsers');
+      expect(res.body.data.stats).toHaveProperty('activeUsers');
+      expect(res.body.data.stats).toHaveProperty('totalRooms');
+      expect(res.body.data.stats).toHaveProperty('activeRooms');
+      expect(res.body.data.stats).toHaveProperty('totalDrinkRecords');
+      expect(res.body.data.stats).toHaveProperty('totalProducts');
+      expect(Array.isArray(res.body.data.recentRooms)).toBe(true);
+      expect(Array.isArray(res.body.data.recentLogs)).toBe(true);
     });
   });
 });

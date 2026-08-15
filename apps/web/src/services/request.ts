@@ -96,4 +96,12 @@ export function patch<T>(
     .then((res) => res.data.data);
 }
 
+/** 统一 DELETE */
+export function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  return request
+    .delete<ApiResponse<T>>(url, config)
+    .then((res) => res.data.data);
+}
+
+export { request };
 export default request;

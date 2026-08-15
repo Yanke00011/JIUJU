@@ -36,6 +36,7 @@ describe('JwtAuthGuard', () => {
     createdAt: new Date('2026-08-15T04:10:20.000Z'),
     updatedAt: new Date('2026-08-15T04:10:20.000Z'),
     lastLoginAt: null,
+    deletedAt: null,
   };
 
   beforeEach(() => {

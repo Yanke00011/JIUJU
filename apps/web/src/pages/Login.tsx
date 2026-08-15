@@ -14,7 +14,9 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const setAuth = useAuthStore((state) => state.setAuth);
-  const [mode, setMode] = useState<Mode>(location.pathname === "/register" ? "register" : "login");
+  const [mode, setMode] = useState<Mode>(
+    location.pathname === "/register" ? "register" : "login",
+  );
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
 
@@ -26,13 +28,20 @@ export default function Login() {
     setLoading(true);
     try {
       if (mode === "login") {
-        const result = await authApi.login(values.username.trim(), values.password);
+        const result = await authApi.login(
+          values.username.trim(),
+          values.password,
+        );
         setAuth(result.accessToken, result.user);
         message.success("登录成功");
         navigate("/", { replace: true });
       } else {
         const nickname = values.nickname?.trim() || values.username.trim();
-        await authApi.register(values.username.trim(), values.password, nickname);
+        await authApi.register(
+          values.username.trim(),
+          values.password,
+          nickname,
+        );
         message.success("注册成功，请登录");
         setMode("login");
         form.resetFields();
@@ -60,7 +69,9 @@ export default function Login() {
           <Typography.Title level={3} style={{ marginBottom: 4 }}>
             酒局管家
           </Typography.Title>
-          <Typography.Text type="secondary">扫码记录饮酒 · 朋友聚会防逃酒</Typography.Text>
+          <Typography.Text type="secondary">
+            扫码记录饮酒 · 朋友聚会防逃酒
+          </Typography.Text>
         </div>
 
         <Tabs
@@ -76,7 +87,12 @@ export default function Login() {
           ]}
         />
 
-        <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={onFinish}
+          requiredMark={false}
+        >
           {mode === "register" && (
             <Form.Item
               name="nickname"
@@ -86,7 +102,11 @@ export default function Login() {
                 { max: 50, message: "昵称最多 50 个字符" },
               ]}
             >
-              <Input prefix={<MobileOutlined />} placeholder="你的昵称" maxLength={50} />
+              <Input
+                prefix={<MobileOutlined />}
+                placeholder="你的昵称"
+                maxLength={50}
+              />
             </Form.Item>
           )}
           <Form.Item
@@ -100,7 +120,11 @@ export default function Login() {
               },
             ]}
           >
-            <Input prefix={<UserOutlined />} placeholder="用户名" maxLength={32} />
+            <Input
+              prefix={<UserOutlined />}
+              placeholder="用户名"
+              maxLength={32}
+            />
           </Form.Item>
           <Form.Item
             name="password"
@@ -117,7 +141,11 @@ export default function Login() {
                 : []),
             ]}
           >
-            <Input.Password prefix={<LockOutlined />} placeholder="密码" maxLength={128} />
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder="密码"
+              maxLength={128}
+            />
           </Form.Item>
           <Button type="primary" htmlType="submit" block loading={loading}>
             {mode === "login" ? "登录" : "注册"}

@@ -5,12 +5,16 @@ import {
   Form,
   Input,
   InputNumber,
+  message,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Table,
   Typography,
 } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
+import { useAuthStore } from "../../store/auth";
 import { adminApi } from "../../services/admin";
 import type { AdminProduct } from "../../services/admin";
 
@@ -24,27 +28,62 @@ const CATEGORY_LABEL: Record<string, string> = {
   OTHER: "其他",
 };
 
+const BARCODE_PATTERN = /^\d{8,14}$/;
+
 export default function AdminProducts() {
   const queryClient = useQueryClient();
+  const isSuperAdmin = useAuthStore(
+    (state) => state.user?.role === "SUPER_ADMIN",
+  );
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [keyword, setKeyword] = useState("");
   const [editing, setEditing] = useState<AdminProduct | null>(null);
+  const [creating, setCreating] = useState(false);
   const [form] = Form.useForm();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin", "products", page, pageSize],
-    queryFn: () => adminApi.products.list(page, pageSize),
+    queryKey: ["admin", "products", page, pageSize, keyword],
+    queryFn: () =>
+      adminApi.products.list({ page, pageSize, keyword: keyword || undefined }),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (payload: {
+      barcode: string;
+      name: string;
+      brand?: string;
+      category: string;
+      volumeMl: number;
+      alcoholPercent?: number;
+    }) => adminApi.products.create(payload),
+    onSuccess: () => {
+      message.success("商品已创建");
+      setCreating(false);
+      form.resetFields();
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
   });
 
   const updateMutation = useMutation({
     mutationFn: (payload: Partial<AdminProduct>) =>
       adminApi.products.update(editing!.id, payload),
     onSuccess: () => {
+      message.success("商品已更新");
+      setEditing(null);
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
     },
   });
 
-  const handleEdit = (record: AdminProduct) => {
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => adminApi.products.remove(id),
+    onSuccess: () => {
+      message.success("商品已删除");
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+
+  const openEdit = (record: AdminProduct) => {
     setEditing(record);
     form.setFieldsValue({
       name: record.name,
@@ -55,16 +94,27 @@ export default function AdminProducts() {
     });
   };
 
-  const handleSubmit = async () => {
+  const handleCreate = async () => {
     const values = await form.validateFields();
-    await updateMutation.mutateAsync({
+    createMutation.mutate({
+      barcode: values.barcode,
+      name: values.name,
+      brand: values.brand || undefined,
+      category: values.category,
+      volumeMl: values.volumeMl,
+      alcoholPercent: values.alcoholPercent ?? undefined,
+    });
+  };
+
+  const handleUpdate = async () => {
+    const values = await form.validateFields();
+    updateMutation.mutate({
       name: values.name,
       brand: values.brand || null,
       category: values.category,
       volumeMl: values.volumeMl,
       alcoholPercent: values.alcoholPercent ?? null,
     });
-    setEditing(null);
   };
 
   const columns = [
@@ -93,18 +143,66 @@ export default function AdminProducts() {
       title: "操作",
       key: "action",
       render: (_: unknown, record: AdminProduct) => (
-        <Button size="small" onClick={() => handleEdit(record)}>
-          编辑
-        </Button>
+        <Space>
+          <Button size="small" onClick={() => openEdit(record)}>
+            编辑
+          </Button>
+          {isSuperAdmin && (
+            <Popconfirm
+              title="确定删除该商品？"
+              onConfirm={() => deleteMutation.mutate(record.id)}
+            >
+              <Button
+                size="small"
+                type="text"
+                danger
+                loading={deleteMutation.isPending}
+              >
+                删除
+              </Button>
+            </Popconfirm>
+          )}
+        </Space>
       ),
     },
   ];
 
+  const isModalOpen = creating || !!editing;
+
   return (
     <div>
-      <Typography.Title level={4} style={{ marginTop: 0 }}>
-        商品管理
-      </Typography.Title>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 12,
+        }}
+      >
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          商品管理
+        </Typography.Title>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => {
+            setCreating(true);
+            form.resetFields();
+          }}
+        >
+          新增商品
+        </Button>
+      </div>
+
+      <Input.Search
+        placeholder="搜索条码 / 名称 / 品牌"
+        allowClear
+        style={{ maxWidth: 320, marginBottom: 12 }}
+        onSearch={(v) => {
+          setKeyword(v);
+          setPage(1);
+        }}
+      />
 
       <Table<AdminProduct>
         rowKey="id"
@@ -127,22 +225,50 @@ export default function AdminProducts() {
       />
 
       <Modal
-        title="编辑商品"
-        open={!!editing}
-        onOk={handleSubmit}
-        onCancel={() => setEditing(null)}
-        confirmLoading={updateMutation.isPending}
+        title={creating ? "新增商品" : "编辑商品"}
+        open={isModalOpen}
+        onOk={creating ? handleCreate : handleUpdate}
+        onCancel={() => {
+          setCreating(false);
+          setEditing(null);
+        }}
+        confirmLoading={
+          creating ? createMutation.isPending : updateMutation.isPending
+        }
         okText="保存"
         cancelText="取消"
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入名称" }]}>
+          {creating && (
+            <Form.Item
+              name="barcode"
+              label="条形码"
+              rules={[
+                { required: true, message: "请输入条形码" },
+                {
+                  pattern: BARCODE_PATTERN,
+                  message: "条形码需为 8-14 位数字（EAN-13 / EAN-8）",
+                },
+              ]}
+            >
+              <Input maxLength={14} placeholder="如 6901234567890" />
+            </Form.Item>
+          )}
+          <Form.Item
+            name="name"
+            label="名称"
+            rules={[{ required: true, message: "请输入名称" }]}
+          >
             <Input maxLength={100} />
           </Form.Item>
           <Form.Item name="brand" label="品牌">
             <Input maxLength={100} />
           </Form.Item>
-          <Form.Item name="category" label="分类" rules={[{ required: true, message: "请选择分类" }]}>
+          <Form.Item
+            name="category"
+            label="分类"
+            rules={[{ required: true, message: "请选择分类" }]}
+          >
             <Select
               options={Object.entries(CATEGORY_LABEL).map(([value, label]) => ({
                 value,

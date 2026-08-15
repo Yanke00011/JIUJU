@@ -143,9 +143,15 @@ export default function AdminLogs() {
               <Descriptions.Item label="操作">
                 <Tag color="blue">{detail.action}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="对象类型">{detail.targetType}</Descriptions.Item>
-              <Descriptions.Item label="目标 ID">{detail.targetId}</Descriptions.Item>
-              <Descriptions.Item label="IP">{detail.ip || "-"}</Descriptions.Item>
+              <Descriptions.Item label="对象类型">
+                {detail.targetType}
+              </Descriptions.Item>
+              <Descriptions.Item label="目标 ID">
+                {detail.targetId}
+              </Descriptions.Item>
+              <Descriptions.Item label="IP">
+                {detail.ip || "-"}
+              </Descriptions.Item>
               <Descriptions.Item label="User-Agent">
                 {detail.userAgent || "-"}
               </Descriptions.Item>

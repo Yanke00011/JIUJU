@@ -13,6 +13,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminRooms from "./pages/admin/AdminRooms";
 import AdminProducts from "./pages/admin/AdminProducts";
+import AdminDrinks from "./pages/admin/AdminDrinks";
 import AdminLogs from "./pages/admin/AdminLogs";
 
 export default function App() {
@@ -46,11 +47,15 @@ export default function App() {
             </AdminRoute>
           }
         >
-          <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+          <Route
+            path="/admin"
+            element={<Navigate to="/admin/dashboard" replace />}
+          />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/rooms" element={<AdminRooms />} />
           <Route path="/admin/products" element={<AdminProducts />} />
+          <Route path="/admin/drinks" element={<AdminDrinks />} />
           <Route path="/admin/logs" element={<AdminLogs />} />
         </Route>
 

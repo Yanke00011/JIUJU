@@ -18,13 +18,17 @@ const makeUser = (overrides: Partial<Record<string, unknown>> = {}) => ({
   createdAt: new Date('2026-08-15T04:10:20.000Z'),
   updatedAt: new Date('2026-08-15T04:10:20.000Z'),
   lastLoginAt: null,
+  deletedAt: null,
   ...overrides,
 });
 
 describe('AdminUsersService', () => {
   let service: AdminUsersService;
   let prisma: {
-    user: { findMany: jest.Mock; count: jest.Mock; findUnique: jest.Mock; update: jest.Mock };
+    user: { findMany: jest.Mock; count: jest.Mock; findUnique: jest.Mock; update: jest.Mock; delete: jest.Mock };
+    roomMember: { count: jest.Mock };
+    drinkRecord: { count: jest.Mock };
+    room: { count: jest.Mock };
     operationLog: { create: jest.Mock };
   };
   let logService: OperationLogService;
@@ -40,7 +44,11 @@ describe('AdminUsersService', () => {
         count: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
       },
+      roomMember: { count: jest.fn().mockResolvedValue(0) },
+      drinkRecord: { count: jest.fn().mockResolvedValue(0) },
+      room: { count: jest.fn().mockResolvedValue(0) },
       operationLog: { create: jest.fn() },
     };
     const logPrisma = { operationLog: prisma.operationLog };
@@ -88,13 +96,17 @@ describe('AdminUsersService', () => {
   });
 
   describe('getById', () => {
-    it('should return a user without passwordHash', async () => {
+    it('should return a user without passwordHash and with counts', async () => {
       prisma.user.findUnique.mockResolvedValue(makeUser());
+      prisma.roomMember.count.mockResolvedValue(3);
+      prisma.drinkRecord.count.mockResolvedValue(5);
 
       const result = await service.getById(USER_ID);
 
       expect(result).not.toHaveProperty('passwordHash');
       expect(result.username).toBe('zhangsan');
+      expect(result.roomCount).toBe(3);
+      expect(result.drinkRecordCount).toBe(5);
     });
 
     it('should return 404 when user does not exist', async () => {
@@ -103,6 +115,60 @@ describe('AdminUsersService', () => {
       await expect(service.getById(USER_ID)).rejects.toMatchObject({
         status: HttpStatus.NOT_FOUND,
         response: { code: 'USER_NOT_FOUND', message: '用户不存在' },
+      });
+    });
+  });
+
+  describe('delete', () => {
+    it('should physically delete a user without history', async () => {
+      prisma.user.findUnique.mockResolvedValue(makeUser());
+      prisma.user.delete.mockResolvedValue(makeUser());
+
+      const result = await service.delete(ADMIN_ID, USER_ID, request);
+
+      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: USER_ID } });
+      expect(result).toEqual({ deleted: true, softDeleted: false });
+    });
+
+    it('should soft delete a user with drink history', async () => {
+      prisma.user.findUnique.mockResolvedValue(makeUser());
+      prisma.drinkRecord.count.mockResolvedValue(2);
+      prisma.user.update.mockResolvedValue(makeUser({ status: 'DISABLED', deletedAt: new Date() }));
+
+      const result = await service.delete(ADMIN_ID, USER_ID, request);
+
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: USER_ID },
+        data: expect.objectContaining({ status: 'DISABLED', deletedAt: expect.any(Date) }),
+      });
+      expect(result).toEqual({ deleted: false, softDeleted: true });
+    });
+
+    it('should reject deleting self', async () => {
+      prisma.user.findUnique.mockResolvedValue(makeUser({ id: ADMIN_ID, role: 'SUPER_ADMIN' }));
+
+      await expect(service.delete(ADMIN_ID, ADMIN_ID, request)).rejects.toMatchObject({
+        status: HttpStatus.FORBIDDEN,
+        response: { code: 'CANNOT_DELETE_SELF' },
+      });
+    });
+
+    it('should reject deleting a SUPER_ADMIN', async () => {
+      prisma.user.findUnique.mockResolvedValue(makeUser({ role: 'SUPER_ADMIN' }));
+
+      await expect(service.delete(ADMIN_ID, USER_ID, request)).rejects.toMatchObject({
+        status: HttpStatus.FORBIDDEN,
+        response: { code: 'CANNOT_DELETE_SUPER_ADMIN' },
+      });
+    });
+
+    it('should return 404 when user does not exist', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.delete(ADMIN_ID, USER_ID, request)).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
+        response: { code: 'USER_NOT_FOUND' },
       });
     });
   });

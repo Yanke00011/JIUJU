@@ -6,6 +6,7 @@ import {
   UserOutlined,
   HomeOutlined,
   ShoppingOutlined,
+  EditOutlined,
   FileTextOutlined,
   MenuOutlined,
   LogoutOutlined,
@@ -18,55 +19,74 @@ const MENU_ITEMS: MenuProps["items"] = [
   { key: "/admin/users", icon: <UserOutlined />, label: "用户管理" },
   { key: "/admin/rooms", icon: <HomeOutlined />, label: "房间管理" },
   { key: "/admin/products", icon: <ShoppingOutlined />, label: "商品管理" },
+  { key: "/admin/drinks", icon: <EditOutlined />, label: "饮酒记录" },
   { key: "/admin/logs", icon: <FileTextOutlined />, label: "操作日志" },
 ];
 
-function SiderContent({ onNavigate }: { onNavigate?: () => void }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const selectedKey =
-    MENU_ITEMS?.find(
-      (item) =>
-        typeof item === "object" &&
-        item !== null &&
-        "key" in item &&
-        location.pathname.startsWith(String(item.key)),
-    )?.key || "/admin/dashboard";
+function buildMenu(onNavigate?: () => void) {
+  return function MenuContent() {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const selectedKey =
+      MENU_ITEMS?.find(
+        (item) =>
+          typeof item === "object" &&
+          item !== null &&
+          "key" in item &&
+          location.pathname.startsWith(String(item.key)),
+      )?.key || "/admin/dashboard";
 
-  return (
-    <Menu
-      theme="dark"
-      mode="inline"
-      selectedKeys={[String(selectedKey)]}
-      items={MENU_ITEMS}
-      onClick={({ key }) => {
-        navigate(key);
-        onNavigate?.();
-      }}
-    />
-  );
+    return (
+      <Menu
+        theme="dark"
+        mode="inline"
+        selectedKeys={[String(selectedKey)]}
+        items={MENU_ITEMS}
+        onClick={({ key }) => {
+          navigate(key);
+          onNavigate?.();
+        }}
+      />
+    );
+  };
 }
 
 /**
- * 管理后台布局：桌面端侧边栏，移动端抽屉菜单。
+ * 管理后台布局：
+ * 桌面端：左侧固定 Sider（唯一导航）；
+ * 移动端：顶部汉堡按钮打开唯一 Drawer（仅移动端显示汉堡按钮，避免双导航）。
  */
 export default function AdminLayout() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [siderCollapsed, setSiderCollapsed] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate("/login", { replace: true });
   };
 
+  const SiderMenu = buildMenu();
+  const DrawerMenu = buildMenu(() => setDrawerOpen(false));
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
+      {/* 桌面端侧边栏（唯一导航）；移动端自动折叠 */}
       <Layout.Sider
         breakpoint="lg"
         collapsedWidth={0}
-        style={{ position: "sticky", top: 0, height: "100vh" }}
+        trigger={null}
+        collapsible
+        collapsed={siderCollapsed}
+        onBreakpoint={(broken) => setSiderCollapsed(broken)}
+        style={{
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          overflow: "auto",
+        }}
       >
         <div
           style={{
@@ -79,7 +99,7 @@ export default function AdminLayout() {
         >
           酒局管家 · 后台
         </div>
-        <SiderContent />
+        <SiderMenu />
       </Layout.Sider>
 
       <Layout>
@@ -96,12 +116,15 @@ export default function AdminLayout() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Button
-              type="text"
-              icon={<MenuOutlined />}
-              onClick={() => setDrawerOpen(true)}
-              style={{ display: "inline-flex" }}
-            />
+            {/* 仅移动端显示汉堡按钮（侧边栏折叠时） */}
+            {siderCollapsed && (
+              <Button
+                type="text"
+                icon={<MenuOutlined />}
+                onClick={() => setDrawerOpen(true)}
+                style={{ display: "inline-flex" }}
+              />
+            )}
             <span style={{ fontWeight: 500 }}>管理后台</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -126,6 +149,7 @@ export default function AdminLayout() {
         </Layout.Content>
       </Layout>
 
+      {/* 移动端唯一导航抽屉 */}
       <Drawer
         title="酒局管家 · 后台"
         placement="left"
@@ -134,7 +158,7 @@ export default function AdminLayout() {
         onClose={() => setDrawerOpen(false)}
         styles={{ body: { padding: 0 } }}
       >
-        <SiderContent onNavigate={() => setDrawerOpen(false)} />
+        <DrawerMenu />
       </Drawer>
     </Layout>
   );

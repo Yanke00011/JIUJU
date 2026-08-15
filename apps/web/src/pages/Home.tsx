@@ -1,13 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  Button,
-  Card,
-  Empty,
-  List,
-  Space,
-  Tag,
-  Typography,
-} from "antd";
+import { Button, Card, Empty, List, Space, Tag, Typography } from "antd";
 import {
   PlusOutlined,
   UnorderedListOutlined,
@@ -41,13 +33,24 @@ function Landing() {
         }}
       >
         <CoffeeOutlined style={{ fontSize: 64, marginBottom: 16 }} />
-        <Typography.Title level={2} style={{ color: "#fff", margin: "0 0 8px" }}>
+        <Typography.Title
+          level={2}
+          style={{ color: "#fff", margin: "0 0 8px" }}
+        >
           酒局管家
         </Typography.Title>
-        <Typography.Paragraph style={{ color: "rgba(255,255,255,0.85)", fontSize: 16, marginBottom: 8 }}>
+        <Typography.Paragraph
+          style={{
+            color: "rgba(255,255,255,0.85)",
+            fontSize: 16,
+            marginBottom: 8,
+          }}
+        >
           扫码记录饮酒 · 朋友聚会防逃酒
         </Typography.Paragraph>
-        <Typography.Paragraph style={{ color: "rgba(255,255,255,0.65)", marginBottom: 0 }}>
+        <Typography.Paragraph
+          style={{ color: "rgba(255,255,255,0.65)", marginBottom: 0 }}
+        >
           创建酒局，邀请好友，扫码登记，自动统计
         </Typography.Paragraph>
       </div>
@@ -62,11 +65,7 @@ function Landing() {
           >
             登录
           </Button>
-          <Button
-            size="large"
-            block
-            onClick={() => navigate("/register")}
-          >
+          <Button size="large" block onClick={() => navigate("/register")}>
             注册
           </Button>
         </Space>
@@ -77,7 +76,9 @@ function Landing() {
               <SafetyOutlined style={{ color: "#1677ff", fontSize: 20 }} />
               <div>
                 <div style={{ fontWeight: 500 }}>防逃酒</div>
-                <div style={{ fontSize: 13, color: "#999" }}>谁的酒，喝了多少，一目了然</div>
+                <div style={{ fontSize: 13, color: "#999" }}>
+                  谁的酒，喝了多少，一目了然
+                </div>
               </div>
             </Space>
           </Card>
@@ -86,16 +87,22 @@ function Landing() {
               <TeamOutlined style={{ color: "#1677ff", fontSize: 20 }} />
               <div>
                 <div style={{ fontWeight: 500 }}>朋友聚会</div>
-                <div style={{ fontSize: 13, color: "#999" }}>邀请码加入，成员排行清晰</div>
+                <div style={{ fontSize: 13, color: "#999" }}>
+                  邀请码加入，成员排行清晰
+                </div>
               </div>
             </Space>
           </Card>
           <Card size="small">
             <Space>
-              <UnorderedListOutlined style={{ color: "#1677ff", fontSize: 20 }} />
+              <UnorderedListOutlined
+                style={{ color: "#1677ff", fontSize: 20 }}
+              />
               <div>
                 <div style={{ fontWeight: 500 }}>自动统计</div>
-                <div style={{ fontSize: 13, color: "#999" }}>瓶数、容量、酒精量实时排行</div>
+                <div style={{ fontSize: 13, color: "#999" }}>
+                  瓶数、容量、酒精量实时排行
+                </div>
               </div>
             </Space>
           </Card>
@@ -127,7 +134,10 @@ function MyRooms() {
           我的酒局
         </Typography.Title>
         <Space>
-          <Button icon={<PlusOutlined />} onClick={() => navigate("/rooms/create")}>
+          <Button
+            icon={<PlusOutlined />}
+            onClick={() => navigate("/rooms/create")}
+          >
             创建酒局
           </Button>
           <Button onClick={() => navigate("/rooms/join")}>加入酒局</Button>
@@ -138,7 +148,10 @@ function MyRooms() {
         loading={isLoading}
         locale={{
           emptyText: (
-            <Empty description="还没有酒局，创建一个吧" style={{ padding: "32px 0" }}>
+            <Empty
+              description="还没有酒局，创建一个吧"
+              style={{ padding: "32px 0" }}
+            >
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -167,7 +180,9 @@ function MyRooms() {
                 }}
               >
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 500 }}>{room.name}</div>
+                  <div style={{ fontSize: 16, fontWeight: 500 }}>
+                    {room.name}
+                  </div>
                   <div style={{ fontSize: 13, color: "#999", marginTop: 4 }}>
                     <UnorderedListOutlined style={{ marginRight: 4 }} />
                     邀请码：{room.inviteCode}

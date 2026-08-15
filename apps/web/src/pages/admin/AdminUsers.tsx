@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   Drawer,
+  Input,
   message,
   Popconfirm,
   Space,
@@ -16,14 +17,23 @@ import type { AdminUser } from "../../services/admin";
 
 export default function AdminUsers() {
   const queryClient = useQueryClient();
-  const currentUserId = useAuthStore((state) => state.user?.id);
+  const currentUser = useAuthStore((state) => state.user);
+  const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [keyword, setKeyword] = useState("");
   const [detail, setDetail] = useState<AdminUser | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin", "users", page, pageSize],
-    queryFn: () => adminApi.users.list(page, pageSize),
+    queryKey: ["admin", "users", page, pageSize, keyword],
+    queryFn: () =>
+      adminApi.users.list({ page, pageSize, keyword: keyword || undefined }),
+  });
+
+  const detailQuery = useQuery({
+    queryKey: ["admin", "users", "detail", detail?.id],
+    queryFn: () => adminApi.users.get(detail!.id),
+    enabled: !!detail?.id,
   });
 
   const statusMutation = useMutation({
@@ -31,6 +41,17 @@ export default function AdminUsers() {
       adminApi.users.updateStatus(id, status),
     onSuccess: () => {
       message.success("状态已更新");
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => adminApi.users.remove(id),
+    onSuccess: (result) => {
+      message.success(
+        result.softDeleted ? "用户已软删除（存在历史数据）" : "用户已删除",
+      );
+      setDetail(null);
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     },
   });
@@ -50,8 +71,20 @@ export default function AdminUsers() {
       dataIndex: "role",
       key: "role",
       render: (role: AdminUser["role"]) => (
-        <Tag color={role === "SUPER_ADMIN" ? "volcano" : role === "ADMIN" ? "orange" : "default"}>
-          {role === "SUPER_ADMIN" ? "超级管理员" : role === "ADMIN" ? "管理员" : "普通用户"}
+        <Tag
+          color={
+            role === "SUPER_ADMIN"
+              ? "volcano"
+              : role === "ADMIN"
+                ? "orange"
+                : "default"
+          }
+        >
+          {role === "SUPER_ADMIN"
+            ? "超级管理员"
+            : role === "ADMIN"
+              ? "管理员"
+              : "普通用户"}
         </Tag>
       ),
     },
@@ -59,9 +92,17 @@ export default function AdminUsers() {
       title: "状态",
       dataIndex: "status",
       key: "status",
-      render: (status: AdminUser["status"]) => (
-        <Tag color={status === "ACTIVE" ? "green" : "red"}>
-          {status === "ACTIVE" ? "正常" : "已禁用"}
+      render: (status: AdminUser["status"], record: AdminUser) => (
+        <Tag
+          color={
+            record.deletedAt ? "red" : status === "ACTIVE" ? "green" : "red"
+          }
+        >
+          {record.deletedAt
+            ? "已删除"
+            : status === "ACTIVE"
+              ? "正常"
+              : "已禁用"}
         </Tag>
       ),
     },
@@ -75,30 +116,53 @@ export default function AdminUsers() {
       title: "操作",
       key: "action",
       render: (_: unknown, record: AdminUser) => {
-        if (record.id === currentUserId) {
+        if (record.id === currentUser?.id) {
           return <Typography.Text type="secondary">当前账号</Typography.Text>;
         }
-        return record.status === "ACTIVE" ? (
-          <Popconfirm
-            title="确定禁用该用户？"
-            onConfirm={() =>
-              statusMutation.mutate({ id: record.id, status: "DISABLED" })
-            }
-          >
-            <Button size="small" danger loading={statusMutation.isPending}>
-              禁用
-            </Button>
-          </Popconfirm>
-        ) : (
-          <Button
-            size="small"
-            type="primary"
-            ghost
-            loading={statusMutation.isPending}
-            onClick={() => statusMutation.mutate({ id: record.id, status: "ACTIVE" })}
-          >
-            恢复
-          </Button>
+        return (
+          <Space>
+            {record.status === "ACTIVE" && !record.deletedAt ? (
+              <Popconfirm
+                title="确定禁用该用户？"
+                onConfirm={() =>
+                  statusMutation.mutate({ id: record.id, status: "DISABLED" })
+                }
+              >
+                <Button size="small" danger loading={statusMutation.isPending}>
+                  禁用
+                </Button>
+              </Popconfirm>
+            ) : (
+              !record.deletedAt && (
+                <Button
+                  size="small"
+                  type="primary"
+                  ghost
+                  loading={statusMutation.isPending}
+                  onClick={() =>
+                    statusMutation.mutate({ id: record.id, status: "ACTIVE" })
+                  }
+                >
+                  恢复
+                </Button>
+              )
+            )}
+            {isSuperAdmin && !record.deletedAt && (
+              <Popconfirm
+                title="确定删除该用户？有历史数据将软删除"
+                onConfirm={() => deleteMutation.mutate(record.id)}
+              >
+                <Button
+                  size="small"
+                  type="text"
+                  danger
+                  loading={deleteMutation.isPending}
+                >
+                  删除
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
         );
       },
     },
@@ -109,6 +173,16 @@ export default function AdminUsers() {
       <Typography.Title level={4} style={{ marginTop: 0 }}>
         用户管理
       </Typography.Title>
+
+      <Input.Search
+        placeholder="搜索用户名 / 昵称"
+        allowClear
+        style={{ maxWidth: 320, marginBottom: 12 }}
+        onSearch={(v) => {
+          setKeyword(v);
+          setPage(1);
+        }}
+      />
 
       <Table<AdminUser>
         rowKey="id"
@@ -136,31 +210,42 @@ export default function AdminUsers() {
         onClose={() => setDetail(null)}
         width={360}
       >
-        {detail && (
+        {detailQuery.isLoading && <Typography.Text>加载中...</Typography.Text>}
+        {detailQuery.data && (
           <Space direction="vertical" size={8} style={{ width: "100%" }}>
             <div>
               <Typography.Text type="secondary">用户名：</Typography.Text>
-              {detail.username}
+              {detailQuery.data.username}
             </div>
             <div>
               <Typography.Text type="secondary">昵称：</Typography.Text>
-              {detail.nickname}
+              {detailQuery.data.nickname}
             </div>
             <div>
               <Typography.Text type="secondary">角色：</Typography.Text>
-              {detail.role}
+              {detailQuery.data.role}
             </div>
             <div>
               <Typography.Text type="secondary">状态：</Typography.Text>
-              {detail.status}
+              {detailQuery.data.deletedAt ? "已删除" : detailQuery.data.status}
             </div>
             <div>
-              <Typography.Text type="secondary">创建时间：</Typography.Text>
-              {new Date(detail.createdAt).toLocaleString("zh-CN")}
+              <Typography.Text type="secondary">注册时间：</Typography.Text>
+              {new Date(detailQuery.data.createdAt).toLocaleString("zh-CN")}
             </div>
             <div>
               <Typography.Text type="secondary">最后登录：</Typography.Text>
-              {detail.lastLoginAt ? new Date(detail.lastLoginAt).toLocaleString("zh-CN") : "-"}
+              {detailQuery.data.lastLoginAt
+                ? new Date(detailQuery.data.lastLoginAt).toLocaleString("zh-CN")
+                : "-"}
+            </div>
+            <div>
+              <Typography.Text type="secondary">参与房间数：</Typography.Text>
+              {detailQuery.data.roomCount}
+            </div>
+            <div>
+              <Typography.Text type="secondary">饮酒记录数：</Typography.Text>
+              {detailQuery.data.drinkRecordCount}
             </div>
           </Space>
         )}

@@ -1,5 +1,19 @@
-import { Controller, Get, HttpStatus, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type { Request, Response } from 'express';
+import { PublicUser } from '../common/utils/public-user';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AdminGuard } from './admin.guard';
 import { AdminRoomsService } from './admin-rooms.service';
 
@@ -23,7 +37,7 @@ export class AdminRoomsController {
   @Get()
   @ApiOperation({
     summary: '房间列表（管理员）',
-    description: '分页返回全部房间，含房主与成员数。',
+    description: '分页返回全部房间，支持按名称 / 邀请码 / 房主关键词搜索，含房主与成员数。',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -37,10 +51,15 @@ export class AdminRoomsController {
     description: '无管理员权限',
     schema: { example: { success: false, error: { code: 'FORBIDDEN', message: '无管理员权限' } } },
   })
-  async list(@Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+  async list(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('keyword') keyword?: string,
+  ) {
     return this.adminRoomsService.list({
       page: page !== undefined ? Number(page) : undefined,
       pageSize: pageSize !== undefined ? Number(pageSize) : undefined,
+      keyword,
     });
   }
 
@@ -68,12 +87,92 @@ export class AdminRoomsController {
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: '房间不存在',
-    schema: {
-      example: { success: false, error: { code: 'ROOM_NOT_FOUND', message: '房间不存在' } },
-    },
+    schema: { example: { success: false, error: { code: 'ROOM_NOT_FOUND', message: '房间不存在' } } },
   })
   async getById(@Param('id') id: string) {
     const room = await this.adminRoomsService.getById(id);
     return { room };
+  }
+
+  @Get(':id/members')
+  @ApiOperation({ summary: '房间成员列表（管理员）', description: '返回房间成员，OWNER 优先。' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: '获取成功',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          items: [
+            { userId: 'x', nickname: '张三', avatar: null, role: 'OWNER', joinedAt: '2026-08-15T04:10:20Z' },
+          ],
+        },
+      },
+    },
+  })
+  async listMembers(@Param('id') id: string) {
+    const items = await this.adminRoomsService.listMembers(id);
+    return { items };
+  }
+
+  @Get(':id/drinks')
+  @ApiOperation({
+    summary: '房间饮酒记录（管理员）',
+    description: '分页返回房间饮酒记录，包含已软删除记录。',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: '获取成功',
+    schema: {
+      example: {
+        success: true,
+        data: { items: [], total: 0, page: 1, pageSize: 20 },
+      },
+    },
+  })
+  async listDrinks(
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.adminRoomsService.listDrinks(id, {
+      page: page !== undefined ? Number(page) : undefined,
+      pageSize: pageSize !== undefined ? Number(pageSize) : undefined,
+    });
+  }
+
+  @Post(':id/end')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '结束房间（管理员）', description: '将 ACTIVE 房间结束为 ENDED。' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: '结束成功',
+    schema: { example: { success: true, data: { room: { ...ROOM_EXAMPLE, status: 'ENDED' } } } },
+  })
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description: '房间已结束',
+    schema: {
+      example: { success: false, error: { code: 'ROOM_ALREADY_ENDED', message: '房间已结束' } },
+    },
+  })
+  async endRoom(
+    @CurrentUser() admin: PublicUser,
+    @Param('id') id: string,
+    @Req() request: Request,
+  ) {
+    const room = await this.adminRoomsService.endRoom(admin.id, id, request);
+    return { room };
+  }
+
+  @Get(':id/export')
+  @ApiOperation({ summary: '导出房间饮酒记录 CSV（管理员）', description: '下载 CSV，包含已删除记录。' })
+  async exportCsv(@Param('id') id: string, @Res() res: Response): Promise<void> {
+    const { filename, csv } = await this.adminRoomsService.exportCsv(id);
+    const encoded = encodeURIComponent(filename);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encoded}`);
+    // BOM 便于 Excel 正确识别 UTF-8
+    res.send('\uFEFF' + csv);
   }
 }

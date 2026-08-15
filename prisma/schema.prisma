@@ -71,6 +71,7 @@ model User {
   createdAt    DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime   @updatedAt @db.Timestamptz(3)
   lastLoginAt  DateTime?  @db.Timestamptz(3)
+  deletedAt    DateTime?  @db.Timestamptz(3) // 软删除：存在历史饮酒记录等数据时使用
 
   // User 同时扮演多个角色，关系必须显式命名以避免 Prisma relation ambiguity
   ownedRooms          Room[]        @relation("RoomOwner")

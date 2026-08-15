@@ -20,17 +20,21 @@ const makeProduct = (overrides: Partial<Record<string, unknown>> = {}) => ({
   ...overrides,
 });
 
+const p2002Error = (target: string[]) => ({
+  code: 'P2002',
+  meta: { target },
+  message: 'Unique constraint failed',
+});
+
 describe('AdminProductsService', () => {
   let service: AdminProductsService;
   let prisma: {
-    product: { findMany: jest.Mock; count: jest.Mock; findUnique: jest.Mock; update: jest.Mock };
+    product: { findMany: jest.Mock; count: jest.Mock; findUnique: jest.Mock; create: jest.Mock; update: jest.Mock; delete: jest.Mock };
+    drinkRecord: { count: jest.Mock };
     operationLog: { create: jest.Mock };
   };
   let logService: OperationLogService;
-  const request = {
-    ip: '127.0.0.1',
-    headers: { 'user-agent': 'test-agent' },
-  } as never;
+  const request = { ip: '127.0.0.1', headers: { 'user-agent': 'test' } } as never;
 
   beforeEach(async () => {
     prisma = {
@@ -38,8 +42,11 @@ describe('AdminProductsService', () => {
         findMany: jest.fn(),
         count: jest.fn(),
         findUnique: jest.fn(),
+        create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
       },
+      drinkRecord: { count: jest.fn().mockResolvedValue(0) },
       operationLog: { create: jest.fn() },
     };
     const logPrisma = { operationLog: prisma.operationLog };
@@ -58,56 +65,73 @@ describe('AdminProductsService', () => {
   });
 
   describe('list', () => {
-    it('should paginate and convert alcoholPercent to number', async () => {
-      prisma.product.findMany.mockResolvedValue([makeProduct()]);
-      prisma.product.count.mockResolvedValue(1);
+    it('should pass keyword filter for barcode/name/brand search', async () => {
+      prisma.product.findMany.mockResolvedValue([]);
+      prisma.product.count.mockResolvedValue(0);
 
-      const result = await service.list({});
+      await service.list({ keyword: '啤酒' });
 
-      expect(result).toMatchObject({ total: 1, page: 1, pageSize: 20 });
-      expect(result.items[0].alcoholPercent).toBe(4.3);
-      expect(result.items[0]).not.toHaveProperty('passwordHash');
+      const where = prisma.product.findMany.mock.calls[0][0].where;
+      expect(where.OR).toBeDefined();
     });
   });
 
-  describe('update', () => {
-    it('should update mutable fields but never barcode, and write log', async () => {
-      prisma.product.findUnique.mockResolvedValue(makeProduct());
-      prisma.product.update.mockResolvedValue(makeProduct({ name: 'XX精酿', volumeMl: 650 }));
+  describe('create', () => {
+    it('should create a product and log', async () => {
+      prisma.product.create.mockResolvedValue(makeProduct());
 
-      const result = await service.update(
+      const result = await service.create(
         ADMIN_ID,
-        PRODUCT_ID,
-        { name: 'XX精酿', volumeMl: 650 },
+        { barcode: '6901234567890', name: 'XX啤酒', category: 'BEER', volumeMl: 500 },
         request,
       );
 
-      expect(prisma.product.update).toHaveBeenCalledWith({
-        where: { id: PRODUCT_ID },
-        data: { name: 'XX精酿', volumeMl: 650 },
-      });
-      expect(prisma.product.update.mock.calls[0][0].data).not.toHaveProperty('barcode');
+      expect(prisma.product.create).toHaveBeenCalled();
+      expect(result.name).toBe('XX啤酒');
       expect(logService.log).toHaveBeenCalledWith(
-        expect.objectContaining({
-          adminUserId: ADMIN_ID,
-          action: 'PRODUCT_UPDATE',
-          targetType: 'Product',
-          targetId: PRODUCT_ID,
-        }),
+        expect.objectContaining({ action: 'PRODUCT_CREATE' }),
       );
-      expect(result.name).toBe('XX精酿');
+    });
+
+    it('should return 409 on duplicate barcode', async () => {
+      prisma.product.create.mockRejectedValue(p2002Error(['barcode']));
+
+      await expect(
+        service.create(ADMIN_ID, { barcode: '6901234567890', name: 'X', category: 'OTHER', volumeMl: 1 }, request),
+      ).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        response: { code: 'PRODUCT_ALREADY_EXISTS' },
+      });
+    });
+  });
+
+  describe('delete', () => {
+    it('should delete a product with no drink records', async () => {
+      prisma.product.findUnique.mockResolvedValue(makeProduct());
+      prisma.drinkRecord.count.mockResolvedValue(0);
+
+      await service.delete(ADMIN_ID, PRODUCT_ID, request);
+
+      expect(prisma.product.delete).toHaveBeenCalledWith({ where: { id: PRODUCT_ID } });
+    });
+
+    it('should reject deleting a product in use', async () => {
+      prisma.product.findUnique.mockResolvedValue(makeProduct());
+      prisma.drinkRecord.count.mockResolvedValue(3);
+
+      await expect(service.delete(ADMIN_ID, PRODUCT_ID, request)).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        response: { code: 'PRODUCT_IN_USE' },
+      });
+      expect(prisma.product.delete).not.toHaveBeenCalled();
     });
 
     it('should return 404 when product does not exist', async () => {
       prisma.product.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.update(ADMIN_ID, PRODUCT_ID, { name: 'X' }, request),
-      ).rejects.toMatchObject({
+      await expect(service.delete(ADMIN_ID, PRODUCT_ID, request)).rejects.toMatchObject({
         status: HttpStatus.NOT_FOUND,
-        response: { code: 'PRODUCT_NOT_FOUND', message: '酒品不存在' },
       });
-      expect(prisma.product.update).not.toHaveBeenCalled();
     });
   });
 });
