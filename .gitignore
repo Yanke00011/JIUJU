@@ -1,0 +1,37 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+
+# test coverage
+coverage/
+
+# environment files (never commit real secrets)
+.env
+.env.local
+.env.*.local
+.env.production
+
+# prisma
+# generated client lives under node_modules; migrations are committed
+
+# logs
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# docker local data
+pgdata/
+
+# backup files
+*.bak
+*.dump

@@ -12,6 +12,22 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
+## 当前进度（Phase 1 已完成）
+
+当前阶段为 **Backend First · Phase 1：项目初始化**，已完成：
+
+- `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
+- ESLint + Prettier
+- Prisma（`prisma/schema.prisma` + `prisma.config.ts`）
+- PostgreSQL Docker（`docker-compose.yml`，`docker compose up -d postgres`）
+- 环境变量（`apps/api/.env.example`）
+- Swagger（`/api/docs`，同时输出 `/api/docs-json` OpenAPI JSON）
+- Health API（`GET /api/v1/health`）
+- 全局 `ValidationPipe`、统一异常处理、统一响应包装、基础请求日志、Helmet、CORS
+- 基础单元测试与 E2E 测试、构建脚本、README
+
+尚未实现（属于后续 Phase）：用户、注册/登录、JWT、房间、成员、酒品、饮酒记录、统计、Admin、用户 Web、Admin Web、微信小程序。
+
 ## 核心功能
 
 ### V1 范围
@@ -105,15 +121,16 @@ jiuju/
 
 ## 安装与启动
 
-以下命令描述目标项目初始化后的标准使用方式；具体脚本名称以项目的 `package.json` 为准。
+以下命令描述当前 Phase 1 的实际使用方式；具体脚本名称以项目的 `package.json` 为准。
 
 ```bash
 git clone <repository-url> jiuju
 cd jiuju
-corepack enable
 pnpm install
-cp .env.example .env
+cp apps/api/.env.example apps/api/.env
 ```
+
+说明：项目使用 `pnpm`（Monorepo）。Node 20 环境建议使用 pnpm 9（可通过 `npm install -g --prefix <dir> pnpm@9` 本地安装，或 `corepack enable` 后由项目内 `packageManager` 字段指定版本）。
 
 启动 PostgreSQL：
 
@@ -121,12 +138,10 @@ cp .env.example .env
 docker compose up -d postgres
 ```
 
-创建并应用数据库迁移、生成 Prisma Client、写入开发种子数据：
+生成 Prisma Client：
 
 ```bash
-pnpm prisma migrate dev
 pnpm prisma generate
-pnpm prisma db seed
 ```
 
 启动 API 开发服务：
@@ -134,6 +149,8 @@ pnpm prisma db seed
 ```bash
 pnpm dev
 ```
+
+> 说明：业务数据模型、Migration 与 Seed 将在 Phase 2（数据库）添加。当前 Phase 1 仅完成 Prisma 初始化与连接配置，尚未包含任何业务模型。
 
 完成 Web 与 Admin 应用后，开发环境可按 workspace 脚本分别或同时启动。生产环境使用：
 
@@ -145,19 +162,21 @@ docker compose up -d
 
 ## 环境变量
 
-创建 `.env` 时至少配置以下变量：
+API 环境变量位于 `apps/api/`。创建 `.env` 时至少配置以下变量：
 
 ```dotenv
 NODE_ENV=development
-DATABASE_URL="postgresql://jiuju:change-me@localhost:5432/jiuju?schema=public"
+DATABASE_URL="postgresql://jiuju:changeme@localhost:5432/jiuju?schema=public"
 JWT_SECRET="replace-with-a-long-random-secret"
 JWT_EXPIRES_IN="7d"
 CORS_ORIGINS="http://localhost:5173,http://localhost:5174"
 API_PORT=3000
 
-# Prisma seed 使用；不得将真实密码提交到 Git
+# Prisma seed 使用（Phase 2 启用）；不得将真实密码提交到 Git
 SEED_ADMIN_PASSWORD="change-me-before-use"
 ```
+
+Prisma CLI 通过根目录 `prisma.config.ts` 加载 `apps/api/.env`。
 
 生产环境必须：
 
@@ -286,13 +305,16 @@ Swagger 必须提供在：
 建议的检查命令：
 
 ```bash
+pnpm lint
 pnpm test
 pnpm test:e2e
-pnpm lint
+pnpm build
 pnpm typecheck
 pnpm prisma validate
 docker compose config
 ```
+
+`pnpm prisma validate` 通过根目录 `prisma.config.ts` 加载 `apps/api/.env` 中的 `DATABASE_URL`。
 
 最低测试覆盖：
 

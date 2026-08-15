@@ -1,0 +1,14 @@
+// 酒局管家 JIUJU 数据库 Schema
+//
+// Phase 1：仅初始化 Prisma 与 PostgreSQL 连接。
+// 业务模型（User / Room / RoomMember / Product / DrinkRecord / OperationLog）
+// 将在 Phase 2（数据库）中新增，并通过 `prisma migrate dev` 生成迁移。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}

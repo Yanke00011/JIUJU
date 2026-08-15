@@ -1,0 +1,31 @@
+{
+  "name": "jiuju",
+  "version": "0.1.0",
+  "private": true,
+  "description": "酒局管家 JIUJU - 多用户酒局管理、酒水记录与统计 Monorepo",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @jiuju/api start:dev",
+    "build": "pnpm --filter @jiuju/api build",
+    "start:prod": "pnpm --filter @jiuju/api start:prod",
+    "lint": "pnpm --filter @jiuju/api lint",
+    "typecheck": "pnpm --filter @jiuju/api typecheck",
+    "format": "pnpm --filter @jiuju/api format",
+    "test": "pnpm --filter @jiuju/api test",
+    "test:watch": "pnpm --filter @jiuju/api test:watch",
+    "test:e2e": "pnpm --filter @jiuju/api test:e2e",
+    "prisma": "prisma",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy"
+  },
+  "devDependencies": {
+    "@prisma/client": "^6.5.0",
+    "dotenv": "^16.4.7",
+    "prisma": "^6.5.0"
+  }
+}
