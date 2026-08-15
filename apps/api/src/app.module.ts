@@ -11,6 +11,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
 import { RoomMembersModule } from './room-members/room-members.module';
 import { RoomModule } from './rooms/rooms.module';
+import { StatisticsModule } from './statistics/statistics.module';
 import { UserModule } from './users/users.module';
 
 @Module({
@@ -33,6 +34,7 @@ import { UserModule } from './users/users.module';
     RoomMembersModule,
     ProductsModule,
     DrinkRecordsModule,
+    StatisticsModule,
   ],
   providers: [
     {

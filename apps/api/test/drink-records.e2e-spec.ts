@@ -82,7 +82,7 @@ describe('Drink Records (e2e)', () => {
       .post('/api/v1/products')
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({
-        barcode: `69${String(Date.now()).slice(-10)}`,
+        barcode: `68${String(Date.now()).slice(-10)}`,
         name: '测试啤酒',
         brand: 'TEST',
         category: 'BEER',
@@ -103,6 +103,7 @@ describe('Drink Records (e2e)', () => {
     await prisma.room.deleteMany({
       where: { owner: { username: { startsWith: 'e2e_drink_' } } },
     });
+    await prisma.product.deleteMany({ where: { name: '测试啤酒' } });
     await prisma.user.deleteMany({ where: { username: { startsWith: 'e2e_drink_' } } });
     await app.close();
   });

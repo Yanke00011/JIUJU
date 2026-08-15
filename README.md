@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1-8 已完成）
+## 当前进度（Phase 1-9 已完成）
 
-当前阶段为 **Backend First · Phase 1-8：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码 + 饮酒记录**，已完成：
+当前阶段为 **Backend First · Phase 1-9：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码 + 饮酒记录 + 酒局统计**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -58,8 +58,15 @@
 - 修改仅允许 `quantity` / `userId`（不允许 roomId/productId）；普通成员只能改自己的记录（否则 403 `DRINK_NOT_OWNER`）
 - 删除为软删除（设置 `deletedAt` / `deletedBy`），不删除数据库记录；列表与详情默认排除已软删除记录
 - Drink Records 单元测试与 E2E 测试（成员登记自己/OWNER 登记别人/非成员/product 不存在/quantity 小数与非法/snapshot 保存/列表隔离/修改权限/软删除/删除后列表隐藏等）
+- Statistics：酒局统计（`GET /api/v1/rooms/:id/statistics`）
+- 实时聚合（不缓存、不复制、不改 DrinkRecord）：`total`（records / totalQuantity / totalVolumeMl / totalAlcoholMl）、`users` 排行、`products` 排行
+- 统计公式：`totalVolumeMl = SUM(quantity × volumeMlSnapshot)`；`alcoholMl = quantity × volumeMlSnapshot × alcoholPercentSnapshot / 100`
+- 只统计 `deletedAt IS NULL`（软删除记录不进入统计）；用户排行按 `alcoholMl DESC`，商品排行按 `quantity DESC`
+- 使用 PostgreSQL 原生聚合（`$queryRaw`，JOIN User/Product 取昵称与酒品名）；Decimal 统一转 number 返回
+- 仅房间成员可查看（非成员 404 `ROOM_NOT_FOUND`）；ENDED 房间允许查看历史统计
+- Statistics 单元测试与 E2E 测试（空房间/单条记录/多用户排行/多商品排行/软删除不统计/Decimal 精度/非成员/ENDED 房间等）
 
-尚未实现（属于后续 Phase）：统计、Admin API、用户 Web、Admin Web、微信小程序。
+尚未实现（属于后续 Phase）：Admin API、用户 Web、Admin Web、微信小程序。
 
 ## 核心功能
 
@@ -371,7 +378,11 @@ pnpm prisma db seed                               # 写入种子数据
   - `PATCH /api/v1/rooms/:roomId/drinks/:drinkId`：仅允许修改 `quantity` / `userId`；普通成员只能改自己的记录（403 `DRINK_NOT_OWNER`）。
   - `DELETE /api/v1/rooms/:roomId/drinks/:drinkId`：软删除（设置 `deletedAt` / `deletedBy`），不删除数据库记录。
   - 创建时保存商品快照（`barcode` / `volumeMlSnapshot` / `alcoholPercentSnapshot`），防止商品修改影响历史；`quantity` 支持小数（0.01-100，最多 2 位小数）。
-- `Stats`：房间汇总、成员排行、酒品排行与历史记录。
+- `Stats`（酒局统计，需要 JWT）：
+  - `GET /api/v1/rooms/:roomId/statistics`：仅房间成员可查看（非成员 404 `ROOM_NOT_FOUND`），ENDED 房间允许查看历史统计。
+  - 返回 `total`（records / totalQuantity / totalVolumeMl / totalAlcoholMl）、`users` 排行（按 `alcoholMl` 降序）、`products` 排行（按 `quantity` 降序）。
+  - 公式：`totalVolumeMl = Σ quantity × volumeMlSnapshot`；`alcoholMl = quantity × volumeMlSnapshot × alcoholPercentSnapshot / 100`。
+  - 实时 PostgreSQL 聚合，只统计 `deletedAt IS NULL`（软删除记录不计入）。
 - `Admin`：全部位于 `/api/v1/admin/*`，与普通用户接口隔离。
 
 Swagger 必须提供在：
