@@ -26,6 +26,7 @@
 - **数据库变化**：无（复用 17.4.1 迁移）。
 - **测试结果**：后端 typecheck/lint/build ✅、unit 159 ✅、e2e 134 ✅、prisma validate ✅；前端 typecheck/build ✅；docker build 两镜像 + compose config ✅；测试数据（e2e_/perf）已清理，`cleanup:test-data` 无残留。
 - **Git commit**：`feat: production deployment and release audit`
+- **后续修复（postgres 读取生产密码）**：`docker-compose.prod.yml` 的 `postgres` 服务改为 `env_file: .env.production`（并移除会覆盖的 `environment:` 插值块、healthcheck 用 `$$` 在容器内展开 `POSTGRES_USER/POSTGRES_DB`）。此前 postgres 只从 shell 默认值 `${POSTGRES_PASSWORD:-changeme}` 取密码，`docker compose up` 不传 shell 变量时会造成与 `DATABASE_URL` 密码不一致（P1000）；现已统一从 `.env.production` 读取。已用独立项目名 `-p` + 全新数据卷实测：不带任何 shell 密码变量 `docker compose up` → postgres healthy、migrate deploy 成功、health database up、经 web 注册登录成功。Git commit：`fix: postgres reads production env via env_file`
 
 ---
 

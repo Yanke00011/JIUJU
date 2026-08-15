@@ -147,6 +147,6 @@ docker compose -f docker-compose.prod.yml up -d --build
 | 现象 | 处理 |
 | --- | --- |
 | `502 Bad Gateway`（/api 经 web） | 检查 `docker logs jiuju-api`，确认 api 正常且 postgres healthy |
-| `P1000` 认证失败 | `POSTGRES_PASSWORD` 与 `DATABASE_URL` 不一致；修改后 `down -v` 重建（会清空数据，先备份） |
+| `P1000` 认证失败 | `POSTGRES_PASSWORD` 与 `DATABASE_URL` 不一致。二者都从 `.env.production` 读取（api 与 postgres 均 `env_file`），先确认 `.env.production` 中两处一致；修改密码后 `down -v` 重建（会清空数据，先备份） |
 | 登录后刷新 404 | 反代未配置 SPA fallback；确认外部代理 `location / { try_files $uri $uri/ /index.html; }` 或 Caddy 直接反代 `localhost:80` |
 | CORS 报错 | `.env.production` 的 `CORS_ORIGINS` 未包含前端域名 |

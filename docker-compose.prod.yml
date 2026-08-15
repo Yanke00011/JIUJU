@@ -44,15 +44,15 @@ services:
     image: postgres:16-alpine
     container_name: jiuju-prod-postgres
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-jiuju}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      POSTGRES_DB: ${POSTGRES_DB:-jiuju}
-      TZ: UTC
+    # 与 api 同一来源读取生产变量（POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB），
+    # 避免 docker compose up 时读到默认密码导致与 DATABASE_URL 不一致。
+    env_file:
+      - .env.production
     volumes:
       - jiuju-prod-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-jiuju} -d ${POSTGRES_DB:-jiuju}']
+      # $$ 让 compose 不插值，命令在容器内展开 env_file 提供的变量
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
       interval: 5s
       timeout: 5s
       retries: 10
