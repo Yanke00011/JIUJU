@@ -266,12 +266,13 @@ export default function RoomDetail() {
 
       {/* 底部固定登记按钮 */}
       <div
+        className="record-action-bar"
         style={{
           position: "fixed",
           bottom: 0,
           left: 0,
           right: 0,
-          padding: 12,
+          padding: "12px 12px calc(12px + env(safe-area-inset-bottom, 0px))",
           background: "#fff",
           borderTop: "1px solid #f0f0f0",
           boxShadow: "0 -2px 8px rgba(0,0,0,0.06)",
