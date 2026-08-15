@@ -17,6 +17,7 @@
   5. **Admin Dashboard**：6 个统计卡改用 `StatCard`（图标 + 强调色 + hover 上浮），使用网格布局（桌面 3 列 / 平板 2 列 / 手机 1 列）；「最近操作日志」增加图标头像与中文动作标签。
   6. **AdminLogs**：新增「表格 / 时间线」视图切换（antd Timeline，DELETE 动作红色节点），时间线视图自带分页。
   7. **全局**：页面进入动画（`page-in`，尊重 `prefers-reduced-motion`）；卡片 hover 提升；统一圆角/阴影/间距继续走既有 CSS 变量与 Theme Token。
+- **后续修复**：酒局详情页底部「登记饮酒」栏在迁移内联样式时遗漏 `position: fixed`，导致按钮不再固定于底部；已补回 fixed 定位/左右吸附/安全区 padding，并将栏内宽度与内容区（760px）对齐，与登记页底部操作栏保持一致。
 - **影响范围**：`apps/web/src/components/common/`（3 个新增）、`apps/web/src/pages/Home.tsx`、`apps/web/src/pages/RoomDetail.tsx`、`apps/web/src/pages/DrinkRecord.tsx`、`apps/web/src/pages/admin/AdminDashboard.tsx`、`apps/web/src/pages/admin/AdminLogs.tsx`、`apps/web/src/styles.css`
 - **API 变化**：无（`git diff apps/api/` 为空）
 - **数据库变化**：无

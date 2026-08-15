@@ -282,7 +282,7 @@ export default function RoomDetail() {
 
       {/* 底部固定登记按钮 */}
       <div className="record-action-bar">
-        <div style={{ maxWidth: 560, margin: "0 auto" }}>
+        <div style={{ maxWidth: 760, margin: "0 auto" }}>
           <Button
             type="primary"
             size="large"

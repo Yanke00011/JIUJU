@@ -1137,9 +1137,15 @@ body {
 
 /* 房间详情底部固定登记栏（覆盖内联样式） */
 .record-action-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 20;
+  padding: 12px max(16px, env(safe-area-inset-left, 0px))
+    calc(12px + env(safe-area-inset-bottom, 0px));
   background: rgba(255, 255, 255, 0.92) !important;
-  border-top-color: var(--line) !important;
+  border-top: 1px solid var(--line);
   box-shadow: 0 -6px 22px rgba(33, 23, 26, 0.08) !important;
   backdrop-filter: blur(14px);
 }
