@@ -1,44 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
 import {
-  Avatar,
   Button,
-  Card,
-  Skeleton,
-  Space,
-  Tag,
 } from "antd";
 import {
   CameraOutlined,
   CrownOutlined,
   GiftOutlined,
-  PlusOutlined,
   SafetyCertificateOutlined,
-  TeamOutlined,
   TrophyOutlined,
-  UserOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "../components/AppLayout";
-import PageHeader from "../components/common/PageHeader";
-import EmptyState from "../components/common/EmptyState";
-import { roomsApi } from "../services/rooms";
+import MyRooms from "../components/MyRooms";
 import { useAuthStore } from "../store/auth";
-import type { Room } from "../types/api";
-
-const STATUS_LABEL: Record<Room["status"], { text: string; color: string }> = {
-  ACTIVE: { text: "进行中", color: "success" },
-  ENDED: { text: "已结束", color: "default" },
-};
-
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  BEER: "🍺",
-  BAIJIU: "🥃",
-  RED_WINE: "🍷",
-  WHITE_WINE: "🍷",
-  SPIRITS: "🥃",
-  COCKTAIL: "🍸",
-  OTHER: "🍾",
-};
 
 function Landing() {
   const navigate = useNavigate();
@@ -125,116 +98,6 @@ function Landing() {
         </div>
       </section>
     </main>
-  );
-}
-
-function MyRooms() {
-  const navigate = useNavigate();
-  const { data: rooms, isLoading, isError } = useQuery({
-    queryKey: ["rooms"],
-    queryFn: roomsApi.list,
-  });
-  return (
-    <div>
-      <PageHeader
-        title="我的酒局"
-        subtitle="把每一次碰杯，都记得清清楚楚。"
-        extra={
-          <>
-            <Button
-              icon={<TeamOutlined />}
-              onClick={() => navigate("/rooms/join")}
-            >
-              加入
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => navigate("/rooms/create")}
-            >
-              创建
-            </Button>
-          </>
-        }
-      />
-      {isLoading ? (
-        <Space direction="vertical" size={14} style={{ width: "100%" }}>
-          <Card>
-            <Skeleton active paragraph={{ rows: 2 }} />
-          </Card>
-          <Card>
-            <Skeleton active paragraph={{ rows: 2 }} />
-          </Card>
-        </Space>
-      ) : isError ? (
-        <Card>
-          <EmptyState
-            description="酒局加载失败"
-            hint="请检查网络后重试"
-            action={
-              <Button
-                type="primary"
-                onClick={() => window.location.reload()}
-              >
-                重新加载
-              </Button>
-            }
-          />
-        </Card>
-      ) : !rooms?.length ? (
-        <Card>
-          <EmptyState
-            description="还没有酒局，先开一桌吧"
-            hint="创建酒局或输入好友的邀请码加入"
-            action={
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => navigate("/rooms/create")}
-              >
-                创建酒局
-              </Button>
-            }
-          />
-        </Card>
-      ) : (
-        <Space direction="vertical" size={14} style={{ width: "100%" }}>
-          {rooms.map((room) => {
-            const status = STATUS_LABEL[room.status];
-            const icon =
-              CATEGORY_ICONS[room.status === "ACTIVE" ? "BEER" : "OTHER"];
-            return (
-              <Card
-                className="room-card"
-                key={room.id}
-                onClick={() => navigate(`/rooms/${room.id}`)}
-              >
-                <div className="room-card-top">
-                  <div>
-                    <div className="room-card-name">
-                      <span style={{ marginRight: 6 }}>{icon}</span>
-                      {room.name}
-                    </div>
-                    <div className="room-code">
-                      邀请码 <b>{room.inviteCode}</b>
-                    </div>
-                  </div>
-                  <Tag color={status.color}>{status.text}</Tag>
-                </div>
-                <div className="room-avatar-group">
-                  <Avatar.Group max={{ count: 4 }}>
-                    <Avatar icon={<UserOutlined />} style={{ backgroundColor: "#8B1E3F" }} />
-                    <Avatar icon={<UserOutlined />} style={{ backgroundColor: "#d18a9e" }} />
-                    <Avatar icon={<UserOutlined />} style={{ backgroundColor: "#e6a23c" }} />
-                  </Avatar.Group>
-                  <span className="room-members">点击查看酒局详情</span>
-                </div>
-              </Card>
-            );
-          })}
-        </Space>
-      )}
-    </div>
   );
 }
 

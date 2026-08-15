@@ -1198,3 +1198,98 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== 我的酒局：进行中/历史 列表 ===== */
+.room-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.room-list-card {
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.room-list-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+.room-list-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.room-list-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.room-list-name {
+  font-weight: 750;
+  font-size: 16px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-list-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.room-list-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.room-list-meta .anticon {
+  color: var(--wine);
+}
+.room-list-invite {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 14px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--wine-soft);
+  color: var(--ink);
+  font-size: 13px;
+}
+.room-list-invite b {
+  color: var(--wine);
+  letter-spacing: 0.18em;
+}
+.room-list-invite .room-invite-copy {
+  margin-left: 0;
+  padding: 3px 10px;
+  border: 1px solid rgba(139, 30, 63, 0.25);
+  color: var(--wine);
+  background: #fff;
+}
+.room-list-end {
+  padding: 12px 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+/* 酒局列表 Tabs */
+.room-list-tabs .ant-tabs-nav {
+  margin-bottom: 14px;
+}
+.room-list-tabs .ant-tabs-tab {
+  font-weight: 600;
+  border-radius: 10px;
+}
+.room-list-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--wine);
+}
+.room-list-tabs .ant-tabs-ink-bar {
+  background: var(--wine);
+}
