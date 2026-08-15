@@ -21,6 +21,7 @@ import { SuperAdminGuard } from './super-admin.guard';
 import { AdminProductsService } from './admin-products.service';
 import { CreateProductDto } from '../products/dto/create-product.dto';
 import { UpdateProductDto } from '../products/dto/update-product.dto';
+import { BatchDeleteProductsDto } from './dto/batch-delete-products.dto';
 
 const PRODUCT_EXAMPLE = {
   id: 'b6c8f2b0-4c3e-4a5b-9f8e-1a2b3c4d5e6f',
@@ -153,5 +154,44 @@ export class AdminProductsController {
   ) {
     await this.adminProductsService.delete(admin.id, id, request);
     return {};
+  }
+
+  @Post('batch-delete')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(SuperAdminGuard)
+  @ApiOperation({
+    summary: '批量删除商品（仅超级管理员）',
+    description:
+      '逐个检查引用关系：未引用则删除，被 DrinkRecord 引用则记为失败（PRODUCT_IN_USE）。返回成功/失败数量与失败列表。',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: '批量删除完成',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          successCount: 1,
+          failCount: 1,
+          failed: [
+            { id: 'x', code: 'PRODUCT_IN_USE', message: '该商品已被饮酒记录引用，无法删除' },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'ids 校验失败',
+    schema: {
+      example: { success: false, error: { code: 'VALIDATION_ERROR', message: 'ids 不能为空' } },
+    },
+  })
+  async batchDelete(
+    @CurrentUser() admin: PublicUser,
+    @Body() dto: BatchDeleteProductsDto,
+    @Req() request: Request,
+  ) {
+    return this.adminProductsService.batchDelete(admin.id, dto.ids, request);
   }
 }

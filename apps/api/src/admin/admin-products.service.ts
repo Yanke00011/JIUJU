@@ -163,6 +163,62 @@ export class AdminProductsService {
     });
   }
 
+  /**
+   * 批量删除商品（仅 SUPER_ADMIN）。
+   * 逐个检查引用关系：未引用则删除；被引用则记为失败（PRODUCT_IN_USE）。
+   * 返回成功/失败汇总与失败商品列表。
+   */
+  async batchDelete(
+    adminUserId: string,
+    ids: string[],
+    request: Request,
+  ): Promise<{
+    successCount: number;
+    failCount: number;
+    failed: Array<{ id: string; code: string; message: string }>;
+  }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const failed: Array<{ id: string; code: string; message: string }> = [];
+    let successCount = 0;
+
+    for (const id of uniqueIds) {
+      const existing = await this.prisma.product.findUnique({ where: { id } });
+      if (!existing) {
+        failed.push({ id, code: 'PRODUCT_NOT_FOUND', message: '商品不存在' });
+        continue;
+      }
+      const drinkCount = await this.prisma.drinkRecord.count({ where: { productId: id } });
+      if (drinkCount > 0) {
+        failed.push({
+          id,
+          code: 'PRODUCT_IN_USE',
+          message: '该商品已被饮酒记录引用，无法删除',
+        });
+        continue;
+      }
+      await this.prisma.product.delete({ where: { id } });
+      successCount += 1;
+    }
+
+    if (successCount > 0) {
+      await this.operationLog.log({
+        adminUserId,
+        action: 'PRODUCT_BATCH_DELETE',
+        targetType: 'Product',
+        targetId: uniqueIds.join(',').slice(0, 100),
+        metadata: {
+          successCount,
+          failCount: failed.length,
+          failedIds: failed.map((f) => ({ id: f.id, code: f.code })),
+        },
+        ip: request.ip,
+        userAgent: request.headers['user-agent'] ?? null,
+      });
+    }
+
+    return { successCount, failCount: failed.length, failed };
+  }
+
   private buildWhere(keyword?: string): Prisma.ProductWhereInput {
     if (!keyword || keyword.trim() === '') {
       return {};

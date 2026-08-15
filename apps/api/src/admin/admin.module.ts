@@ -14,6 +14,8 @@ import { AdminDrinksController } from './admin-drinks.controller';
 import { AdminDrinksService } from './admin-drinks.service';
 import { AdminDashboardController } from './admin-dashboard.controller';
 import { AdminDashboardService } from './admin-dashboard.service';
+import { AdminAnalyticsController } from './admin-analytics.controller';
+import { AdminAnalyticsService } from './admin-analytics.service';
 
 @Module({
   controllers: [
@@ -23,6 +25,7 @@ import { AdminDashboardService } from './admin-dashboard.service';
     AdminLogsController,
     AdminDrinksController,
     AdminDashboardController,
+    AdminAnalyticsController,
   ],
   providers: [
     AdminGuard,
@@ -34,6 +37,7 @@ import { AdminDashboardService } from './admin-dashboard.service';
     AdminLogsService,
     AdminDrinksService,
     AdminDashboardService,
+    AdminAnalyticsService,
   ],
   exports: [OperationLogService],
 })

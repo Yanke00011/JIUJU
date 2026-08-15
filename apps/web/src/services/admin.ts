@@ -113,6 +113,38 @@ export interface AdminDashboard {
   }>;
 }
 
+export interface AdminAnalytics {
+  roomTrends: Array<{ date: string; count: number }>;
+  drinkTrends: Array<{ date: string; count: number }>;
+  topProducts: Array<{
+    productId: string;
+    name: string;
+    barcode: string;
+    quantity: number;
+  }>;
+  userRanking: Array<{
+    userId: string;
+    username: string;
+    nickname: string;
+    quantity: number;
+    volumeMl: number;
+    alcoholMl: number;
+  }>;
+  activeRooms: Array<{
+    id: string;
+    name: string;
+    inviteCode: string;
+    createdAt: string;
+    owner: { id: string; username: string; nickname: string } | null;
+  }>;
+}
+
+export interface BatchDeleteResult {
+  successCount: number;
+  failCount: number;
+  failed: Array<{ id: string; code: string; message: string }>;
+}
+
 export interface PageResult<T> {
   items: T[];
   total: number;
@@ -122,6 +154,11 @@ export interface PageResult<T> {
 
 export const adminApi = {
   dashboard: () => get<AdminDashboard>("/admin/dashboard"),
+
+  analytics: (days?: number) =>
+    get<AdminAnalytics>("/admin/analytics", {
+      params: days !== undefined ? { days } : undefined,
+    }),
 
   users: {
     list: (params: { page?: number; pageSize?: number; keyword?: string }) =>
@@ -173,6 +210,8 @@ export const adminApi = {
         (r) => r.product,
       ),
     remove: (id: string) => del<{ success: boolean }>(`/admin/products/${id}`),
+    batchDelete: (ids: string[]) =>
+      post<BatchDeleteResult>("/admin/products/batch-delete", { ids }),
   },
 
   drinks: {

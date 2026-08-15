@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { Key } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
@@ -13,10 +14,10 @@ import {
   Table,
   Typography,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import { useAuthStore } from "../../store/auth";
 import { adminApi } from "../../services/admin";
-import type { AdminProduct } from "../../services/admin";
+import type { AdminProduct, BatchDeleteResult } from "../../services/admin";
 
 const CATEGORY_LABEL: Record<string, string> = {
   BAIJIU: "白酒",
@@ -40,6 +41,10 @@ export default function AdminProducts() {
   const [keyword, setKeyword] = useState("");
   const [editing, setEditing] = useState<AdminProduct | null>(null);
   const [creating, setCreating] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+  const [batchResult, setBatchResult] = useState<BatchDeleteResult | null>(
+    null,
+  );
   const [form] = Form.useForm();
 
   const { data, isLoading } = useQuery({
@@ -79,6 +84,15 @@ export default function AdminProducts() {
     mutationFn: (id: string) => adminApi.products.remove(id),
     onSuccess: () => {
       message.success("商品已删除");
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+
+  const batchDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => adminApi.products.batchDelete(ids),
+    onSuccess: (result) => {
+      setBatchResult(result);
+      setSelectedRowKeys([]);
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
     },
   });
@@ -169,6 +183,11 @@ export default function AdminProducts() {
 
   const isModalOpen = creating || !!editing;
 
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (keys: Key[]) => setSelectedRowKeys(keys),
+  };
+
   return (
     <div>
       <div
@@ -194,15 +213,38 @@ export default function AdminProducts() {
         </Button>
       </div>
 
-      <div className="admin-toolbar"><Input.Search
-        placeholder="搜索条码 / 名称 / 品牌"
-        allowClear
-        style={{ maxWidth: 320, marginBottom: 12 }}
-        onSearch={(v) => {
-          setKeyword(v);
-          setPage(1);
-        }}
-      /></div>
+      <div className="admin-toolbar">
+        <Input.Search
+          placeholder="搜索条码 / 名称 / 品牌"
+          allowClear
+          style={{ maxWidth: 320 }}
+          onSearch={(v) => {
+            setKeyword(v);
+            setPage(1);
+          }}
+        />
+        {isSuperAdmin && (
+          <Popconfirm
+            title={`确定删除选中的 ${selectedRowKeys.length} 个商品？被引用商品将被跳过。`}
+            disabled={selectedRowKeys.length === 0}
+            onConfirm={() =>
+              batchDeleteMutation.mutate(selectedRowKeys as string[])
+            }
+          >
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              disabled={selectedRowKeys.length === 0}
+              loading={batchDeleteMutation.isPending}
+            >
+              批量删除
+              {selectedRowKeys.length > 0
+                ? `（${selectedRowKeys.length}）`
+                : ""}
+            </Button>
+          </Popconfirm>
+        )}
+      </div>
 
       <Table<AdminProduct>
         rowKey="id"
@@ -210,6 +252,7 @@ export default function AdminProducts() {
         loading={isLoading}
         columns={columns}
         dataSource={data?.items ?? []}
+        rowSelection={isSuperAdmin ? rowSelection : undefined}
         pagination={{
           current: page,
           pageSize,
@@ -289,6 +332,42 @@ export default function AdminProducts() {
             </Form.Item>
           </Space>
         </Form>
+      </Modal>
+
+      <Modal
+        title="批量删除结果"
+        open={!!batchResult}
+        onCancel={() => setBatchResult(null)}
+        footer={[
+          <Button
+            key="close"
+            type="primary"
+            onClick={() => setBatchResult(null)}
+          >
+            知道了
+          </Button>,
+        ]}
+      >
+        {batchResult && (
+          <div>
+            <Typography.Paragraph>
+              成功删除 <b>{batchResult.successCount}</b> 个商品；失败{" "}
+              <b>{batchResult.failCount}</b> 个。
+            </Typography.Paragraph>
+            {batchResult.failed.length > 0 && (
+              <>
+                <Typography.Text strong>失败列表：</Typography.Text>
+                <ul style={{ marginTop: 8, paddingLeft: 20, color: "#cf1322" }}>
+                  {batchResult.failed.map((f) => (
+                    <li key={f.id} style={{ marginBottom: 4, fontSize: 13 }}>
+                      {f.message}（{f.id.slice(0, 8)}…）
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );

@@ -134,4 +134,49 @@ describe('AdminProductsService', () => {
       });
     });
   });
+
+  describe('batchDelete', () => {
+    it('should delete unreferenced products and report failures for referenced ones', async () => {
+      prisma.product.findUnique
+        .mockResolvedValueOnce(makeProduct({ id: 'p1' }))
+        .mockResolvedValueOnce(makeProduct({ id: 'p2' }))
+        .mockResolvedValueOnce(makeProduct({ id: 'p3' }));
+      prisma.drinkRecord.count
+        .mockResolvedValueOnce(0) // p1 可删
+        .mockResolvedValueOnce(3) // p2 被引用
+        .mockResolvedValueOnce(0); // p3 可删
+
+      const result = await service.batchDelete(ADMIN_ID, ['p1', 'p2', 'p3'], request);
+
+      expect(result.successCount).toBe(2);
+      expect(result.failCount).toBe(1);
+      expect(result.failed[0]).toMatchObject({ id: 'p2', code: 'PRODUCT_IN_USE' });
+      expect(prisma.product.delete).toHaveBeenCalledTimes(2);
+      expect(logService.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'PRODUCT_BATCH_DELETE' }),
+      );
+    });
+
+    it('should report PRODUCT_NOT_FOUND for missing ids', async () => {
+      prisma.product.findUnique.mockResolvedValueOnce(null);
+
+      const result = await service.batchDelete(ADMIN_ID, ['missing'], request);
+
+      expect(result).toEqual({
+        successCount: 0,
+        failCount: 1,
+        failed: [{ id: 'missing', code: 'PRODUCT_NOT_FOUND', message: '商品不存在' }],
+      });
+    });
+
+    it('should dedupe ids', async () => {
+      prisma.product.findUnique.mockResolvedValue(makeProduct());
+      prisma.drinkRecord.count.mockResolvedValue(0);
+
+      const result = await service.batchDelete(ADMIN_ID, ['p1', 'p1'], request);
+
+      expect(result.successCount).toBe(1);
+      expect(prisma.product.delete).toHaveBeenCalledTimes(1);
+    });
+  });
 });

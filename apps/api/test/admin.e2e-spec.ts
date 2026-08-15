@@ -32,7 +32,14 @@ describe('Admin (e2e)', () => {
 
     prisma = app.get(PrismaService);
     await prisma.drinkRecord.deleteMany({
-      where: { room: { owner: { username: { startsWith: 'e2e_admin' } } } },
+      where: {
+        OR: [
+          { room: { owner: { username: { startsWith: 'e2e_admin' } } } },
+          { product: { name: '批量引用中' } },
+          { product: { name: '引用中啤酒' } },
+          { product: { name: '软删啤酒' } },
+        ],
+      },
     });
     await prisma.roomMember.deleteMany({
       where: { user: { username: { startsWith: 'e2e_admin' } } },
@@ -48,6 +55,9 @@ describe('Admin (e2e)', () => {
           { name: '待删除啤酒' },
           { name: '引用中啤酒' },
           { name: '恢复啤酒' },
+          { name: '批量删除A' },
+          { name: '批量删除B' },
+          { name: '批量引用中' },
         ],
       },
     });
@@ -84,7 +94,14 @@ describe('Admin (e2e)', () => {
 
   afterAll(async () => {
     await prisma.drinkRecord.deleteMany({
-      where: { room: { owner: { username: { startsWith: 'e2e_admin' } } } },
+      where: {
+        OR: [
+          { room: { owner: { username: { startsWith: 'e2e_admin' } } } },
+          { product: { name: '批量引用中' } },
+          { product: { name: '引用中啤酒' } },
+          { product: { name: '软删啤酒' } },
+        ],
+      },
     });
     await prisma.roomMember.deleteMany({
       where: { user: { username: { startsWith: 'e2e_admin' } } },
@@ -100,6 +117,9 @@ describe('Admin (e2e)', () => {
           { name: '待删除啤酒' },
           { name: '引用中啤酒' },
           { name: '恢复啤酒' },
+          { name: '批量删除A' },
+          { name: '批量删除B' },
+          { name: '批量引用中' },
         ],
       },
     });
@@ -627,6 +647,107 @@ describe('Admin (e2e)', () => {
       expect(res.body.data.stats).toHaveProperty('totalProducts');
       expect(Array.isArray(res.body.data.recentRooms)).toBe(true);
       expect(Array.isArray(res.body.data.recentLogs)).toBe(true);
+    });
+  });
+
+  describe('Admin analytics', () => {
+    it('should return trends, rankings, and active rooms', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/admin/analytics?days=14')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(Array.isArray(res.body.data.roomTrends)).toBe(true);
+      expect(Array.isArray(res.body.data.drinkTrends)).toBe(true);
+      expect(Array.isArray(res.body.data.topProducts)).toBe(true);
+      expect(Array.isArray(res.body.data.userRanking)).toBe(true);
+      expect(Array.isArray(res.body.data.activeRooms)).toBe(true);
+      // 数据实时来自数据库
+      for (const point of res.body.data.roomTrends) {
+        expect(typeof point.date).toBe('string');
+        expect(typeof point.count).toBe('number');
+      }
+    });
+  });
+
+  describe('Admin product batch delete', () => {
+    it('should batch delete unreferenced products and report failures', async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { username: adminName } });
+      const room = await prisma.room.findFirstOrThrow({ where: { ownerId: owner.id } });
+
+      const free1 = await prisma.product.create({
+        data: {
+          barcode: `57${String(Date.now()).slice(-10)}a`,
+          name: '批量删除A',
+          category: 'BEER',
+          volumeMl: 500,
+        },
+      });
+      const free2 = await prisma.product.create({
+        data: {
+          barcode: `57${String(Date.now()).slice(-10)}b`,
+          name: '批量删除B',
+          category: 'BEER',
+          volumeMl: 500,
+        },
+      });
+      const inUse = await prisma.product.create({
+        data: {
+          barcode: `57${String(Date.now()).slice(-10)}c`,
+          name: '批量引用中',
+          category: 'BEER',
+          volumeMl: 500,
+        },
+      });
+      await prisma.drinkRecord.create({
+        data: {
+          roomId: room.id,
+          productId: inUse.id,
+          userId: owner.id,
+          createdBy: owner.id,
+          barcode: inUse.barcode,
+          volumeMlSnapshot: 500,
+          quantity: 1,
+          clientRequestId: `00000000-0000-4000-8003-${String(Date.now()).slice(-12)}`,
+        },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/admin/products/batch-delete')
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .send({ ids: [free1.id, free2.id, inUse.id] })
+        .expect(200);
+
+      expect(res.body.data).toEqual({
+        successCount: 2,
+        failCount: 1,
+        failed: [{ id: inUse.id, code: 'PRODUCT_IN_USE', message: '该商品已被饮酒记录引用，无法删除' }],
+      });
+
+      const gone1 = await prisma.product.findUnique({ where: { id: free1.id } });
+      const gone2 = await prisma.product.findUnique({ where: { id: free2.id } });
+      const kept = await prisma.product.findUnique({ where: { id: inUse.id } });
+      expect(gone1).toBeNull();
+      expect(gone2).toBeNull();
+      expect(kept).not.toBeNull();
+    });
+
+    it('should reject ADMIN batch delete with 403', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/admin/products/batch-delete')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ids: ['11111111-1111-4111-8111-111111111111'] })
+        .expect(403);
+      expect(res.body.error.code).toBe('SUPER_ADMIN_REQUIRED');
+    });
+
+    it('should reject empty ids with 400', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/admin/products/batch-delete')
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .send({ ids: [] })
+        .expect(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
   });
 });

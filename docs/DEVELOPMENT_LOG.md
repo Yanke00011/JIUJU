@@ -6,6 +6,26 @@
 
 ---
 
+## Phase 16 — Admin 数据分析增强 + 扫码体验升级 + UI 设计规范（已完成）
+
+- **状态**：已完成
+- **新增功能**：
+  - Admin Dashboard 数据修复：移除前端 mock 统计，全部数据实时来自数据库（`GET /admin/dashboard` + `GET /admin/analytics`）
+  - Admin 运营分析：酒局趋势、饮酒趋势（每日聚合）、热门酒品 Top10（按饮用数量）、用户饮酒排行（按酒精摄入量）、活跃酒局列表
+  - 商品批量管理：表格多选 + 批量删除（逐个检查 DrinkRecord 引用，未引用删除、被引用返回 `PRODUCT_IN_USE`），返回成功/失败数量与失败列表，前端展示详细结果
+  - 扫码页升级：全屏扫码视窗、圆角扫描框 + 四角装饰、半透明遮罩、酒红/金色扫描线 + 光晕动画、扫码中/识别成功/未找到商品/摄像头权限状态提示、商品确认卡片弹入动画
+  - UI Design System：新增 `docs/UI_DESIGN_SYSTEM.md`（颜色/字体/按钮/卡片/间距/动画/响应式/公共组件/主题 Token 规范）
+- **数据库变化**：无
+- **API 变化**：
+  - `GET /api/v1/admin/analytics?days=`（运营分析）
+  - `POST /api/v1/admin/products/batch-delete`（批量删除，SUPER_ADMIN）
+- **权限**：批量删除仅 SUPER_ADMIN（`SuperAdminGuard`）；分析接口 ADMIN / SUPER_ADMIN；写入 `OperationLog`（`PRODUCT_BATCH_DELETE`）
+- **Git commit**：`feat: enhance admin analytics and scanner experience`
+- **测试结果**：后端 typecheck/lint ✅，145 unit / 120 e2e ✅（e2e 连跑 3 次稳定），build ✅，prisma validate ✅；前端 typecheck/build ✅
+- **重要设计说明**：Analytics 与批量删除均在后端完成聚合与引用检查，避免大量数据传到前端计算（禁止前端 mock 统计）。
+
+---
+
 ## Phase 15.1 — Admin Dashboard 增强（进行中）
 
 - **状态**：进行中

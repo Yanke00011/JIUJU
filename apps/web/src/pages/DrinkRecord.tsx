@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Alert,
   Button,
   Card,
   Descriptions,
@@ -17,6 +16,8 @@ import {
   ArrowLeftOutlined,
   CameraOutlined,
   ReloadOutlined,
+  CheckCircleFilled,
+  CloseCircleFilled,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
@@ -27,6 +28,9 @@ import type { Product } from "../types/api";
 
 const SCANNER_ID = "drink-scanner";
 
+type ScanStatus =
+  "idle" | "scanning" | "success" | "not-found" | "camera-denied";
+
 export default function DrinkRecord() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
@@ -35,7 +39,7 @@ export default function DrinkRecord() {
 
   const [scanner, setScanner] = useState<Html5Qrcode | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
   const [barcode, setBarcode] = useState<string>("");
   const [product, setProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
@@ -44,10 +48,16 @@ export default function DrinkRecord() {
     mutationFn: (code: string) => productsApi.findByBarcode(code),
     onSuccess: (p) => {
       setProduct(p);
+      setScanStatus("success");
       stopScanner();
+      // 短暂展示识别成功动画后展示商品
+      setTimeout(() => setScanStatus("idle"), 900);
     },
     onError: () => {
       setProduct(null);
+      setScanStatus("not-found");
+      // 未找到商品，提示后继续扫描
+      setTimeout(() => setScanStatus("scanning"), 1800);
     },
   });
 
@@ -60,6 +70,7 @@ export default function DrinkRecord() {
       setProduct(null);
       setBarcode("");
       setQuantity(1);
+      setScanStatus("idle");
     },
   });
 
@@ -72,7 +83,7 @@ export default function DrinkRecord() {
   }, []);
 
   const startScanner = useCallback(() => {
-    setCameraError(null);
+    setScanStatus("scanning");
     const qr = new Html5Qrcode(SCANNER_ID, {
       verbose: false,
       formatsToSupport: [
@@ -100,9 +111,9 @@ export default function DrinkRecord() {
         setScanner(qr);
         setScanning(true);
       })
-      .catch((err) => {
-        setCameraError(String(err));
+      .catch(() => {
         setScanning(false);
+        setScanStatus("camera-denied");
       });
   }, [productQuery]);
 
@@ -112,6 +123,7 @@ export default function DrinkRecord() {
       scanner.clear();
       setScanner(null);
       setScanning(false);
+      setScanStatus("idle");
     }
   }, [scanner]);
 
@@ -126,7 +138,7 @@ export default function DrinkRecord() {
   const canSubmit = !!product && !!userId && !createMutation.isPending;
 
   return (
-    <div>
+    <div className="drink-record-page">
       <Button
         type="text"
         icon={<ArrowLeftOutlined />}
@@ -140,27 +152,52 @@ export default function DrinkRecord() {
         登记饮酒
       </Typography.Title>
 
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Typography.Paragraph
-          type="secondary"
-          style={{ marginTop: 0, fontSize: 13 }}
+      {/* 全屏扫码区域 */}
+      <div className="scanner-shell">
+        <div
+          className="scanner-frame"
+          style={{ display: scanning ? "block" : "none" }}
         >
-          对准酒瓶条码，自动识别并查询商品；也可手动输入条码。
-        </Typography.Paragraph>
+          <div id={SCANNER_ID} style={{ width: "100%" }} />
+          {/* 半透明遮罩 + 四角装饰 + 扫描线 由 CSS 实现 */}
+          <div className="scanner-overlay">
+            <div className="scan-corner corner-tl" />
+            <div className="scan-corner corner-tr" />
+            <div className="scan-corner corner-bl" />
+            <div className="scan-corner corner-br" />
+            <div className="scan-line" />
+          </div>
 
-        {cameraError && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message="无法打开摄像头"
-            description="请允许摄像头权限，或在 HTTPS / localhost 下访问；也可以手动输入条码。"
-          />
+          {/* 扫码状态提示 */}
+          <div className="scan-status">
+            {scanStatus === "success" && (
+              <span className="scan-status-success">
+                <CheckCircleFilled /> 识别成功
+              </span>
+            )}
+            {scanStatus === "not-found" && (
+              <span className="scan-status-error">
+                <CloseCircleFilled /> 未找到商品，请重新扫描
+              </span>
+            )}
+            {scanStatus === "scanning" && <span>正在扫描酒瓶条码...</span>}
+          </div>
+        </div>
+
+        {scanStatus === "camera-denied" && (
+          <div className="camera-denied">
+            <Typography.Text strong>无法打开摄像头</Typography.Text>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+              请允许摄像头权限，或在 HTTPS / localhost
+              下访问；也可以手动输入条码。
+            </Typography.Paragraph>
+            <Button size="small" onClick={() => setScanStatus("idle")}>
+              知道了
+            </Button>
+          </div>
         )}
 
-        <div className="scanner-frame" style={{ display: scanning ? "block" : "none" }}><div id={SCANNER_ID} style={{ width: "100%" }} /></div>
-
-        {!scanning && !product && (
+        {!scanning && scanStatus !== "camera-denied" && (
           <Button
             icon={<CameraOutlined />}
             block
@@ -170,19 +207,16 @@ export default function DrinkRecord() {
             打开摄像头扫码
           </Button>
         )}
-        {scanning && !product && (
-          <Space
-            style={{ width: "100%", justifyContent: "center", display: "flex" }}
+        {scanning && (
+          <Button
+            type="text"
+            icon={<ReloadOutlined />}
+            onClick={stopScanner}
+            size="small"
+            style={{ display: "block", margin: "0 auto 12px" }}
           >
-            <Button
-              type="primary"
-              icon={<ReloadOutlined />}
-              onClick={stopScanner}
-              size="small"
-            >
-              关闭摄像头
-            </Button>
-          </Space>
+            关闭摄像头
+          </Button>
         )}
 
         <Form
@@ -209,7 +243,7 @@ export default function DrinkRecord() {
             </Space.Compact>
           </Form.Item>
         </Form>
-      </Card>
+      </div>
 
       {productQuery.isPending && (
         <div style={{ textAlign: "center", padding: 24 }}>
@@ -218,7 +252,11 @@ export default function DrinkRecord() {
       )}
 
       {product && (
-        <Card className="product-confirm" title="确认酒品" style={{ marginBottom: 12 }}>
+        <Card
+          className="product-confirm product-confirm-anim"
+          title="确认酒品"
+          style={{ marginBottom: 12 }}
+        >
           <Descriptions column={1} size="small" labelStyle={{ width: 80 }}>
             <Descriptions.Item label="名称">{product.name}</Descriptions.Item>
             <Descriptions.Item label="品牌">
@@ -259,7 +297,14 @@ export default function DrinkRecord() {
               >
                 确认登记
               </Button>
-              <Button onClick={() => setProduct(null)}>重新选择</Button>
+              <Button
+                onClick={() => {
+                  setProduct(null);
+                  setScanStatus("idle");
+                }}
+              >
+                重新选择
+              </Button>
             </Space>
           </Form>
         </Card>
@@ -277,7 +322,13 @@ export default function DrinkRecord() {
             >
               查看酒局统计
             </Button>,
-            <Button key="again" onClick={() => setProduct(null)}>
+            <Button
+              key="again"
+              onClick={() => {
+                setProduct(null);
+                createMutation.reset();
+              }}
+            >
               继续登记
             </Button>,
           ]}
