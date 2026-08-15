@@ -6,7 +6,23 @@
 
 ---
 
-## Phase 17.5.2 — 备份脚本可用性修复与验证
+## Phase 17.5.2 — 生产 Prisma seed 初始化流程修复
+
+- **状态**：已完成
+- **问题**：生产 api 容器执行 `docker compose exec api sh -c 'pnpm prisma db seed'` 报 `TypeError: Unknown file extension ".ts"`。原因：`prisma.config.ts` 的 seed 命令为 `ts-node prisma/seed.ts`，生产容器 Node 环境下 ts-node 无法执行 `.ts`（ESM 加载器报错）。
+- **修复**（不采用容器内临时方案）：
+  1. `prisma.config.ts`：seed 命令改为 `tsx prisma/seed.ts`（tsx 同时兼容 CJS/ESM）。
+  2. 根 `package.json`：新增 `tsx` devDependency，并补充 `"prisma": { "seed": "tsx prisma/seed.ts" }`（兼容 Prisma CLI 读取）。
+  3. `.env.production.example`：新增 `SEED_ADMIN_PASSWORD`（首部署必填，创建 `admin`）。
+- **环境变量传递**：确认 `docker-compose.prod.yml` api 服务 `env_file: .env.production`，实测 `docker compose exec api env | grep SEED` 输出 `SEED_ADMIN_PASSWORD=xxx`。
+- **验证（全链路）**：重新 `docker build` api 镜像 → 用独立项目名起完整 prod compose（全新数据卷）→ `docker compose exec api sh -c 'pnpm prisma db seed'` 成功（`tsx prisma/seed.ts ... Seed 完成`）→ 生产库创建 `admin:SUPER_ADMIN:ACTIVE` 与 testuser → 经 web 代理用 `SEED_ADMIN_PASSWORD` 登录成功（SUPER_ADMIN）。测试栈已销毁、数据卷已清理，开发 postgres 不受影响。
+- **文档**：`docs/DEPLOYMENT.md` 增加「初始化管理员（seed）」步骤（配置 .env.production → 设置 SEED_ADMIN_PASSWORD → prisma db seed → admin 登录）。
+- **API / 数据库结构变化**：无（仅 seed 执行器与部署文档）。
+- **Git commit**：`fix: production prisma seed initialization`
+
+---
+
+## Phase 17.5.3 — 备份脚本可用性修复与验证
 
 - **状态**：已完成
 - **问题**：`scripts/backup.sh` 只检测生产容器 `jiuju-prod-postgres`，开发容器 `jiuju-postgres` 会落入「本机 pg_dump」分支而失败。

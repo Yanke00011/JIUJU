@@ -7,6 +7,7 @@ loadEnv({ path: 'apps/api/.env' });
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
-    seed: 'ts-node prisma/seed.ts',
+    // 使用 tsx 执行 seed（ts-node 在生产 Node ESM 环境下会报 Unknown file extension .ts）
+    seed: 'tsx prisma/seed.ts',
   },
 });

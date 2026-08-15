@@ -46,6 +46,7 @@ cp .env.production.example .env.production
 | `DATABASE_URL` | 与 `POSTGRES_PASSWORD` 一致（`postgres:5432`） |
 | `CORS_ORIGINS` | 你的前端域名，如 `https://app.example.com`（禁止 `*`） |
 | `SWAGGER_ENABLED` | 生产保持 `false` |
+| `SEED_ADMIN_PASSWORD` | **首次部署必填**：管理员 `admin` 的初始密码（用于 seed） |
 
 ## 三、首次部署
 
@@ -60,6 +61,25 @@ docker compose -f docker-compose.prod.yml up -d --build
 curl http://localhost/api/v1/health          # {"success":true,...,"database":"up"}
 curl http://localhost/                       # 返回 React 首页
 ```
+
+### 初始化管理员（seed）
+
+全新数据库**不会自动创建 `admin` 账号**，需要手动执行一次 seed：
+
+```bash
+# 1. 确认 .env.production 已设置 SEED_ADMIN_PASSWORD（管理员初始密码）
+
+# 2. 在 api 容器内执行 seed（使用 tsx 运行，生产环境可用）
+docker compose -f docker-compose.prod.yml exec api sh -c 'pnpm prisma db seed'
+
+# 3. 用 admin / SEED_ADMIN_PASSWORD 登录后台验证
+```
+
+> 说明：
+> - seed 采用 `tsx` 执行（`prisma.config.ts` 中 `seed: 'tsx prisma/seed.ts'`），生产容器与本地一致，不再依赖 ts-node。
+> - `SEED_ADMIN_PASSWORD` 由 compose 的 `env_file: .env.production` 注入 api 容器，`docker compose exec api env | grep SEED` 可确认。
+> - 生产数据库会创建 `admin`（SUPER_ADMIN）、测试用户 `testuser` 与 3 个示例酒品。若不需要示例数据可后续自行清理（禁止删除 `admin`）。
+> - seed 可重复执行（upsert 幂等）。
 
 > 若 web 绑定 80 端口被占用，可用 `WEB_PORT=8080` 覆盖；生产建议保持 80 由反向代理转发。
 
