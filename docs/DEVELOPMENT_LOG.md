@@ -6,6 +6,29 @@
 
 ---
 
+## Phase 17.5 — JIUJU V1.0 Release Candidate 最终上线审验
+
+- **状态**：已完成
+- **审验范围**：生产部署 / 数据库 / 安全 / 用户流程回归 / 扫码专项 / 前端体验 / 性能 / 日志 / 文档。
+- **生产部署（新增 web 服务，Docker Compose 单机部署）**：
+  - 新增 `apps/web/nginx.conf`：nginx 静态托管 + SPA fallback + `/api` 反向代理（`/api/xxx` → `api:3000/api/v1/xxx`，`/api/v1/health` 保持原样）。
+  - 新增 `apps/web/Dockerfile`（多阶段：Node 构建 → nginx 运行时），生产 `VITE_API_BASE_URL=/api`（相对路径，禁止写死 localhost）。
+  - `docker-compose.prod.yml` 增加 `web` 服务（web:80 + api:3000 + postgres:5432 内部，持久化卷 + healthcheck）；HTTPS/域名由外部反向代理（Lucky/Nginx/Caddy）负责。
+  - **部署验证**：`docker build` 两个镜像 ✅；隔离 web 容器测试 `/` 返回 React、`/api/v1/health` → database up、SPA fallback、注册/登录经代理 ✅；完整 `docker compose -f docker-compose.prod.yml up`（fresh DB）→ migrate deploy 成功、web+api+postgres healthy、经 web 代理注册登录 ✅；生产 Swagger 关闭（/api/docs 404）✅；请求日志含 requestId ✅。
+  - 教训记录：dev/prod compose 同目录共享项目名，`down -v` 会互相影响；已写入 `docs/DEPLOYMENT.md`（建议 `-p jiuju-prod` 隔离）。
+- **数据库**：`prisma validate` ✅；4 个迁移完整，生产 `migrate deploy` 幂等验证 ✅；索引核对（User/Room/RoomMember/Product/DrinkRecord/OperationLog 关键查询字段均有索引）；新增 `scripts/backup.sh`（pg_dump + gzip，保留 7 天）+ `docs/BACKUP.md`。
+- **安全审计**：JWT 过期/无/非法 → 401（e2e 覆盖）；USER→admin 403、ADMIN 不可改角色/删用户、SUPER_ADMIN 可角色管理（e2e 覆盖）；IDOR（非成员房间/记录/管理数据 404/403）e2e 覆盖；ValidationPipe whitelist + Prisma 参数化查询防注入、React 默认转义防 XSS；密码 Argon2 且数据库无明文。
+- **用户流程最终回归**：登录→建房→选择已有酒品→登记→统计→结束→ENDING→撤销→再次结束→自动 ENDED（浏览器实测 + e2e 全流程）。
+- **性能（模拟 100 酒局 / 1000 记录 / 100 成员房间）**：统计接口 28ms、我的酒局列表 18ms、后台 Dashboard 46ms（PostgreSQL 原生聚合，无 N+1 问题）。
+- **日志**：OperationLog 覆盖（用户状态/角色/商品/房间结束/取消结束/系统归档）；请求日志含 requestId/method/url/statusCode/duration。
+- **文档**：新增 `docs/DEPLOYMENT.md`（服务器/首次部署/更新/回滚/备份恢复）、`docs/BACKUP.md`、`docs/RELEASE_CHECKLIST.md`；README 增加「更新部署」流程与文档链接。
+- **API 变化**：无（仅新增部署基础设施与文档）。
+- **数据库变化**：无（复用 17.4.1 迁移）。
+- **测试结果**：后端 typecheck/lint/build ✅、unit 159 ✅、e2e 134 ✅、prisma validate ✅；前端 typecheck/build ✅；docker build 两镜像 + compose config ✅；测试数据（e2e_/perf）已清理，`cleanup:test-data` 无残留。
+- **Git commit**：`feat: production deployment and release audit`
+
+---
+
 ## Phase 17.4.1 — 酒局结束冷静期机制
 
 - **状态**：已完成

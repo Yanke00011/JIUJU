@@ -335,13 +335,17 @@ pnpm prisma validate
 
 ## 部署
 
+生产使用 **Docker Compose 单机部署**，包含三个服务：`web`（nginx 托管 React 静态站 + `/api` 反向代理 + SPA fallback）、`api`（NestJS production）、`postgres`（PostgreSQL 持久化）。HTTPS / 域名由外部反向代理（Lucky / Nginx / Caddy）负责，不在本 compose 内终止。
+
+> 完整部署教程见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)；上线检查清单见 [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)。
+
 ### 开发
 
 ```bash
 docker compose up -d postgres
 ```
 
-### 生产（Docker Compose）
+### 首次生产部署
 
 ```bash
 cp .env.production.example .env.production   # 填写真实值（JWT_SECRET / CORS_ORIGINS / 数据库密码）
@@ -350,20 +354,37 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 生产要点：
 
+- `web`：React 构建产物由 nginx 托管，前端使用相对路径 `VITE_API_BASE_URL=/api`（禁止写死 `localhost:3000`），`/api` 由 nginx 反代到 `api:3000`；
 - API 容器启动时自动执行 `prisma migrate deploy`（禁止 `migrate dev` / `db push`）；
 - `JWT_SECRET` 为空、`CORS_ORIGINS` 为空或含 `*` 时拒绝启动；
-- 生产默认关闭 Swagger；
-- PostgreSQL 使用持久化数据卷。
+- 生产默认关闭 Swagger；PostgreSQL 使用持久化数据卷；
+- 外部代理规则：`/` → `web:80`，`/api` → `web:80`（web 内部再转 api）。
+
+### 更新部署
+
+```bash
+# 0. 更新前备份数据库
+./scripts/backup.sh /data/backups
+
+# 1. 拉取最新代码
+git pull
+
+# 2. 重新构建并启动
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 3. 数据库迁移（api 启动时自动执行；如需手动）
+docker compose -f docker-compose.prod.yml exec api sh -c 'pnpm prisma migrate deploy'
+```
 
 ### 数据库备份
 
 ```bash
-docker exec <postgres-container> pg_dump -U jiuju jiuju > backup.sql
-# 恢复
-cat backup.sql | docker exec -i <postgres-container> psql -U jiuju jiuju
+./scripts/backup.sh /data/backups        # 一键备份（pg_dump + gzip，保留 7 天）
+# 恢复（详见 docs/BACKUP.md）
+gunzip -c /data/backups/backup_<时间戳>.sql.gz | docker exec -i jiuju-prod-postgres psql -U jiuju -d jiuju
 ```
 
-建议每日备份并保留至少 7 天。
+建议每日备份并保留至少 7 天，详见 [docs/BACKUP.md](docs/BACKUP.md)。
 
 ---
 
@@ -371,6 +392,9 @@ cat backup.sql | docker exec -i <postgres-container> psql -U jiuju jiuju
 
 - [开发日志（按 Phase）](docs/DEVELOPMENT_LOG.md)
 - [JIUJU UI 设计规范](docs/UI_DESIGN_SYSTEM.md)
+- [生产部署指南](docs/DEPLOYMENT.md)
+- [数据库备份与恢复](docs/BACKUP.md)
+- [上线检查清单](docs/RELEASE_CHECKLIST.md)
 - [项目规格书](PROJECT_SPEC.md)
 - [AI Agent 开发说明](AGENT_INSTRUCTIONS.md)
 

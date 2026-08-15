@@ -1,6 +1,26 @@
-# 酒局管家 JIUJU 生产 Compose
+# 酒局管家 JIUJU 生产 Compose（Docker Compose 单机部署）
 # 使用：cp .env.production.example .env.production && docker compose -f docker-compose.prod.yml up -d --build
+#
+# 外部 HTTPS / 域名由反向代理（Lucky / Nginx / Caddy）负责：
+#   /     → web:80
+#   /api  → api:3000
+# 本 compose 不负责 HTTPS 终止。
 services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    container_name: jiuju-web
+    restart: unless-stopped
+    ports:
+      - '${WEB_PORT:-80}:80'
+    depends_on:
+      - api
+    networks:
+      - jiuju
+
   api:
     build:
       context: .
