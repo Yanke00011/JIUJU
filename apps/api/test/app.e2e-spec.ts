@@ -22,12 +22,12 @@ describe('App (e2e)', () => {
   });
 
   describe('GET /api/v1/health', () => {
-    it('should return ok with unified success envelope', async () => {
+    it('should return ok with unified success envelope and database status', async () => {
       const res = await request(app.getHttpServer()).get('/api/v1/health').expect(200);
 
       expect(res.body).toEqual({
         success: true,
-        data: { status: 'ok' },
+        data: { status: 'ok', database: 'up' },
       });
     });
   });

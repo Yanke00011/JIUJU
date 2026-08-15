@@ -1,0 +1,32 @@
+# 构建上下文排除项
+node_modules
+**/node_modules
+**/dist
+**/coverage
+**/coverage-e2e
+
+# 环境变量与密钥
+.env
+.env.*
+!.env.production.example
+**/.env
+**/.env.*
+
+# Git 与编辑器
+.git
+.gitignore
+**/.git
+.gitkeep
+.vscode
+.idea
+*.log
+
+# 文档与测试
+docs
+*.md
+**/*.spec.ts
+**/*.e2e-spec.ts
+**/__tests__
+Dockerfile
+.dockerignore
+docker-compose*.yml

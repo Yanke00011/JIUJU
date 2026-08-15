@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1-11 已完成）
+## 当前进度（Phase 1-12 已完成）
 
-当前阶段为 **Backend First · Phase 1-11：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码 + 饮酒记录 + 酒局统计 + Admin API + 操作日志**，已完成：
+当前阶段为 **Backend First · Phase 1-12：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码 + 饮酒记录 + 酒局统计 + Admin API + 操作日志 + 生产部署准备**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -77,6 +77,13 @@
   - 日志查询仅 ADMIN / SUPER_ADMIN；不存在 404 `LOG_NOT_FOUND`；日志只能新增，不能修改/删除
   - OperationLog 索引已具备（adminUserId / action / targetType+targetId / createdAt），无需新增 migration
   - Admin API 单元测试与 E2E 测试（USER 403 / ADMIN 成功 / SUPER_ADMIN 成功 / 分页 / 状态修改 / 禁止自禁用 / 商品修改 / barcode 不可改 / 日志生成与查询/过滤/详情）
+- 生产部署准备：
+  - 多阶段 Dockerfile（install → build → production runtime，仅包含运行所需文件）与 `.dockerignore`
+  - `docker-compose.prod.yml`（api + postgres，环境变量从 `.env.production` 读取，生产启动执行 `prisma migrate deploy`）
+  - `.env.production.example`（NODE_ENV / DATABASE_URL / JWT_SECRET / JWT_EXPIRES_IN / CORS_ORIGINS / API_PORT / SWAGGER_ENABLED）
+  - Health 增强：`GET /api/v1/health` 增加数据库状态（`{ status, database }`，数据库断开返回 `unhealthy`）
+  - 生产安全：JWT_SECRET 为空拒绝启动；`NODE_ENV=production` 默认关闭 Swagger（仅 `SWAGGER_ENABLED=true` 时开启）；生产 CORS 严格读取 `CORS_ORIGINS`，禁止 `*`
+  - 请求日志增强：所有日志包含 `requestId / method / url / statusCode / duration`（`x-request-id` 响应头）
 
 尚未实现（属于后续 Phase）：用户 Web、Admin Web、微信小程序。
 
@@ -224,18 +231,24 @@ JWT_EXPIRES_IN="7d"
 CORS_ORIGINS="http://localhost:5173,http://localhost:5174"
 API_PORT=3000
 
+# Swagger：生产默认关闭；仅当显式设为 true 时开启
+SWAGGER_ENABLED=true
+
 # Prisma seed 使用（Phase 2 启用）；不得将真实密码提交到 Git
 SEED_ADMIN_PASSWORD="change-me-before-use"
 ```
 
 Prisma CLI 通过根目录 `prisma.config.ts` 加载 `apps/api/.env`。
 
+生产环境使用根目录 `.env.production.example`（复制为 `.env.production`），变量与上方一致并增加 `SWAGGER_ENABLED`；`docker-compose.prod.yml` 会读取该文件。
+
 生产环境必须：
 
-- 使用强随机的 `JWT_SECRET`，禁止复用开发值；
-- 仅允许可信来源出现在 `CORS_ORIGINS`；
-- 将密钥放在安全的部署环境或密钥管理服务中，不提交 `.env`；
-- 使用独立的数据库账号、强密码和持久化卷。
+- 使用强随机的 `JWT_SECRET`，禁止复用开发值（为空会导致启动失败）；
+- 仅允许可信来源出现在 `CORS_ORIGINS`，生产禁止 `*`（为空或 `*` 会导致启动失败）；
+- 将密钥放在安全的部署环境或密钥管理服务中，不提交 `.env` / `.env.production`；
+- 使用独立的数据库账号、强密码和持久化卷；
+- 生产默认关闭 Swagger，仅当 `SWAGGER_ENABLED=true` 时开启。
 
 ## 数据库与 Prisma
 
@@ -462,6 +475,35 @@ docker compose config
 docker compose up -d postgres
 ```
 
+### 生产镜像构建
+
+使用多阶段 `Dockerfile`（install → build → production runtime，最终镜像只含运行所需文件）：
+
+```bash
+docker build -t jiuju-api:prod .
+```
+
+### 生产部署（docker-compose.prod.yml）
+
+```bash
+cp .env.production.example .env.production   # 填写真实值
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+`docker-compose.prod.yml` 包含 `api` 与 `postgres` 两个服务：
+
+- API 容器启动时先执行 `prisma migrate deploy`（生产禁止 `prisma migrate dev`），再启动 NestJS；
+- 环境变量从 `.env.production` 读取（`env_file`）；
+- `postgres` 使用持久化卷 `jiuju-prod-postgres-data`，通过健康检查等待数据库就绪后再启动 API；
+- 容器内部固定监听 `API_PORT=3000`，宿主机端口通过 `.env.production` 的 `API_PORT` 映射。
+
+生产环境安全行为：
+
+- `JWT_SECRET` 为空 → 拒绝启动；
+- `NODE_ENV=production` 且 `CORS_ORIGINS` 为空或包含 `*` → 拒绝启动；
+- `NODE_ENV=production` 默认关闭 Swagger，仅当 `SWAGGER_ENABLED=true` 时开启；
+- `GET /api/v1/health` 返回数据库状态（数据库断开 → `unhealthy`）。
+
 生产部署需包含：
 
 - API、Web、Admin 与 PostgreSQL 容器；
@@ -471,6 +513,38 @@ docker compose up -d postgres
 - 数据库备份脚本，使用 `pg_dump`，目标为每日备份并保留至少 7 天。
 
 第一版至少提供可执行备份脚本，不要求接入自动化平台。
+
+### 数据库迁移
+
+开发环境使用：
+
+```bash
+pnpm prisma migrate dev --name <migration-name>
+```
+
+生产环境只允许：
+
+```bash
+pnpm prisma migrate deploy   # 或由 API 容器启动时自动执行
+```
+
+禁止在生产环境使用 `prisma migrate dev` 或 `prisma db push`。
+
+### 备份与恢复
+
+使用 `pg_dump` 备份：
+
+```bash
+docker exec <postgres-container> pg_dump -U jiuju jiuju > backup.sql
+```
+
+恢复：
+
+```bash
+cat backup.sql | docker exec -i <postgres-container> psql -U jiuju jiuju
+```
+
+生产建议：每日备份并保留至少 7 天，可在备份后对恢复流程做定期演练。
 
 ## 安全
 

@@ -1,0 +1,47 @@
+# 酒局管家 JIUJU 生产 Compose
+# 使用：cp .env.production.example .env.production && docker compose -f docker-compose.prod.yml up -d --build
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jiuju-api
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      API_PORT: 3000
+    ports:
+      - '${API_PORT:-3000}:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - jiuju
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: jiuju-prod-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jiuju}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-jiuju}
+      TZ: UTC
+    volumes:
+      - jiuju-prod-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-jiuju} -d ${POSTGRES_DB:-jiuju}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - jiuju
+
+volumes:
+  jiuju-prod-postgres-data:
+
+networks:
+  jiuju:
+    driver: bridge
