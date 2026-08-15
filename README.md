@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1、2、3、4 已完成）
+## 当前进度（Phase 1、2、3、4、5 已完成）
 
-当前阶段为 **Backend First · Phase 1 + Phase 2 + Phase 3 + Phase 4：项目初始化 + 数据库 + 认证 + 用户资料**，已完成：
+当前阶段为 **Backend First · Phase 1-5：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -34,8 +34,13 @@
 - Users：用户资料（`GET /api/v1/users/me`、`PATCH /api/v1/users/me`）
 - 用户资料可修改 `nickname` / `avatar`；不允许修改 `username`、`role`、`status` 等字段
 - Users 单元测试与 E2E 测试（getMe/updateMe、无 token 401、非法昵称/头像、不可改 role/status、不返回 passwordHash）
+- Rooms：创建 / 列表 / 详情 / 结束（`POST /api/v1/rooms`、`GET /api/v1/rooms`、`GET /api/v1/rooms/:id`、`POST /api/v1/rooms/:id/end`）
+- 创建房间在 Prisma 事务中同时创建 `Room` + `RoomMember(OWNER)`，保证原子性
+- 6 位邀请码（字符集 `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`，排除 `I/O/0/1`），唯一冲突自动重试
+- 非成员查看详情一律 404 `ROOM_NOT_FOUND`（不泄露房间是否存在）；仅房主可结束（成员 403）；重复结束 409 `ROOM_ALREADY_ENDED`
+- Rooms 单元测试与 E2E 测试（创建/事务回滚/邀请码/列表隔离/详情 404/结束权限/重复结束等）
 
-尚未实现（属于后续 Phase）：房间、成员、酒品、饮酒记录、统计、Admin API、用户 Web、Admin Web、微信小程序。
+尚未实现（属于后续 Phase）：RoomMember 完整管理与加入房间、酒品、饮酒记录、统计、Admin API、用户 Web、Admin Web、微信小程序。
 
 ## 核心功能
 
@@ -319,7 +324,14 @@ pnpm prisma db seed                               # 写入种子数据
   - `GET /api/v1/users/me`：需要 JWT，返回当前登录用户资料（不含 `passwordHash`）。
   - `PATCH /api/v1/users/me`：需要 JWT，允许修改 `nickname`（1-50 位）与 `avatar`（合法的 http(s) URL，最长 500 字符）；`username`、`role`、`status`、`passwordHash` 等字段不可修改（传入即被 DTO 校验拒绝，返回 400）。
   - 身份一律来自 JWT，不使用 body/URL 中的 userId。
-- `Rooms` 与 `Members`：创建、加入、退出、成员、结束与房间权限。
+- `Rooms`（酒局房间，全部需要 JWT）：
+  - `POST /api/v1/rooms`：创建房间，自动生成 6 位邀请码，房主自动成为 `OWNER` 成员；创建在 Prisma 事务中完成（`Room` + `RoomMember(OWNER)` 原子创建）。
+  - `GET /api/v1/rooms`：返回当前用户参与的房间列表（基于 `RoomMember.userId`，不查全库）。
+  - `GET /api/v1/rooms/:id`：房间详情，仅成员可查看；非成员统一返回 404 `ROOM_NOT_FOUND`（不泄露房间是否存在）。
+  - `POST /api/v1/rooms/:id/end`：结束房间，仅房主可操作（普通成员 403 `ROOM_NOT_OWNER`）；`ACTIVE → ENDED`，`endedAt` 使用数据库时间；重复结束返回 409 `ROOM_ALREADY_ENDED`。
+  - 邀请码：6 位，字符集 `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`（排除 `I/O/0/1`），数据库唯一约束兜底，冲突时自动重试重新生成。
+  - V1 不提供 `DELETE /rooms/:id`，房间历史数据只允许 `ACTIVE → ENDED`，不能反向恢复。
+- `Room Members`（Phase 6）：加入房间、成员列表、踢人、转让房主等成员管理。
 - `Products`：如 `GET /api/v1/products/barcode/:barcode`；找不到时返回 `PRODUCT_NOT_FOUND`。
 - `Drinks`：`POST /api/v1/rooms/:roomId/drinks`。创建前依次校验 JWT、登记人房间成员身份、房间为 `ACTIVE`、酒品存在、实际饮用者属于房间、幂等键，然后创建或返回原记录。
 - `Stats`：房间汇总、成员排行、酒品排行与历史记录。
