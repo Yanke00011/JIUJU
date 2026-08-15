@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { AdminModule } from './admin/admin.module';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { DrinkRecordsModule } from './drink-records/drink-records.module';
 import { HealthModule } from './health/health.module';
@@ -35,6 +36,7 @@ import { UserModule } from './users/users.module';
     ProductsModule,
     DrinkRecordsModule,
     StatisticsModule,
+    AdminModule,
   ],
   providers: [
     {

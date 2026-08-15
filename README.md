@@ -12,9 +12,9 @@
 创建酒局 → 朋友加入 → 扫描酒瓶条码 → 识别酒品 → 选择饮用者 → 确认登记 → 自动统计
 ```
 
-## 当前进度（Phase 1-9 已完成）
+## 当前进度（Phase 1-10 已完成）
 
-当前阶段为 **Backend First · Phase 1-9：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码 + 饮酒记录 + 酒局统计**，已完成：
+当前阶段为 **Backend First · Phase 1-10：项目初始化 + 数据库 + 认证 + 用户资料 + 酒局房间 + 房间成员 + 酒品与条形码 + 饮酒记录 + 酒局统计 + Admin API**，已完成：
 
 - `apps/api` NestJS 后端初始化（TypeScript strict、pnpm Monorepo）
 - ESLint + Prettier
@@ -65,8 +65,16 @@
 - 使用 PostgreSQL 原生聚合（`$queryRaw`，JOIN User/Product 取昵称与酒品名）；Decimal 统一转 number 返回
 - 仅房间成员可查看（非成员 404 `ROOM_NOT_FOUND`）；ENDED 房间允许查看历史统计
 - Statistics 单元测试与 E2E 测试（空房间/单条记录/多用户排行/多商品排行/软删除不统计/Decimal 精度/非成员/ENDED 房间等）
+- Admin API（仅 ADMIN / SUPER_ADMIN，普通 USER 403）：
+  - 用户管理：`GET /api/v1/admin/users`（分页）、`GET /api/v1/admin/users/:id`、`PATCH /api/v1/admin/users/:id/status`（ACTIVE/DISABLED）
+  - 房间管理：`GET /api/v1/admin/rooms`（分页，含房主与成员数）、`GET /api/v1/admin/rooms/:id`（含成员数、记录数、统计摘要）
+  - 商品管理：`GET /api/v1/admin/products`（分页）、`PATCH /api/v1/admin/products/:id`（不允许修改 barcode）
+  - `AdminGuard` 复用 JWT `role`：ADMIN / SUPER_ADMIN 放行，USER 403 `FORBIDDEN`
+  - 管理员不能禁用自己（403 `CANNOT_DISABLE_SELF`）；身份一律来自 JWT，禁止 body 传 adminId
+  - 操作日志：修改用户状态、修改商品时写入 `OperationLog`（adminUserId / action / targetType / targetId / JSON details / IP / UA），查询接口留待后续
+  - Admin API 单元测试与 E2E 测试（USER 403 / ADMIN 成功 / SUPER_ADMIN 成功 / 分页 / 状态修改 / 禁止自禁用 / 商品修改 / barcode 不可改 / 日志生成）
 
-尚未实现（属于后续 Phase）：Admin API、用户 Web、Admin Web、微信小程序。
+尚未实现（属于后续 Phase）：用户 Web、Admin Web、微信小程序。
 
 ## 核心功能
 
@@ -383,7 +391,11 @@ pnpm prisma db seed                               # 写入种子数据
   - 返回 `total`（records / totalQuantity / totalVolumeMl / totalAlcoholMl）、`users` 排行（按 `alcoholMl` 降序）、`products` 排行（按 `quantity` 降序）。
   - 公式：`totalVolumeMl = Σ quantity × volumeMlSnapshot`；`alcoholMl = quantity × volumeMlSnapshot × alcoholPercentSnapshot / 100`。
   - 实时 PostgreSQL 聚合，只统计 `deletedAt IS NULL`（软删除记录不计入）。
-- `Admin`：全部位于 `/api/v1/admin/*`，与普通用户接口隔离。
+- `Admin`（全部位于 `/api/v1/admin/*`，仅 ADMIN / SUPER_ADMIN，普通 USER 403）：
+  - `GET /api/v1/admin/users`、`GET /api/v1/admin/users/:id`、`PATCH /api/v1/admin/users/:id/status`（ACTIVE/DISABLED，不能禁用自己）。
+  - `GET /api/v1/admin/rooms`（分页，含 owner 与 memberCount）、`GET /api/v1/admin/rooms/:id`（含 memberCount / drinkRecordCount / stats 摘要）。
+  - `GET /api/v1/admin/products`（分页）、`PATCH /api/v1/admin/products/:id`（不允许修改 barcode）。
+  - 修改用户状态、修改商品会写入 `OperationLog`（详情为 JSON）。
 
 Swagger 必须提供在：
 
